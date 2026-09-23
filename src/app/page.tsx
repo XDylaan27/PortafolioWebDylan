@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { PROJECTS, ProjectCategory } from '@/content/projects';
-import { ArrowUpRight, FolderGit2, Sparkles, Terminal, Code2, Layers, Mail, ExternalLink } from 'lucide-react';
+import { ArrowUpRight, FolderGit2, Sparkles, Terminal, Code2, Layers, Mail, ExternalLink, Trophy } from 'lucide-react';
 
 const CATEGORIES: { key: 'all' | ProjectCategory; label: string }[] = [
   { key: 'all', label: 'Todos' },
@@ -52,6 +52,37 @@ export default function HomePage() {
         <p className="mt-8 text-xl md:text-2xl text-neutral-600 dark:text-neutral-400 font-serif-editorial max-w-3xl leading-relaxed">
           Ingeniero de software y creador digital. Construyo sistemas modulares, herramientas interactivas y experimentos web alojados bajo un único universo de rutas.
         </p>
+
+        {/* Tarjeta de Acceso Directo al Proyecto de Apuestas */}
+        <div className="mt-8 p-6 rounded-lg border border-neutral-300 dark:border-neutral-800 bg-neutral-100/60 dark:bg-neutral-900/40 flex flex-col md:flex-row md:items-center justify-between gap-6 transition-all hover:border-neutral-400 dark:hover:border-neutral-700">
+          <div className="space-y-1.5 max-w-xl">
+            <div className="flex items-center gap-2">
+              <span className="flex items-center gap-1.5 text-xs font-mono text-emerald-600 dark:text-emerald-400 font-medium">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                Proyecto en Vivo
+              </span>
+              <span className="text-neutral-400 dark:text-neutral-600 text-xs font-mono">&bull;</span>
+              <span className="text-xs font-mono text-neutral-500 uppercase tracking-wider">
+                Quiniela en Tiempo Real
+              </span>
+            </div>
+            <h2 className="text-xl md:text-2xl font-serif-editorial font-medium text-neutral-900 dark:text-neutral-100">
+              Apuesta & Quiniela de Puntajes
+            </h2>
+            <p className="text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
+              Crea salas de apuestas con pronósticos numéricos secretos, invita amigos y corona en directo al participante más cercano cuando se defina el resultado.
+            </p>
+          </div>
+
+          <Link
+            href="/lab/apuesta-puntaje"
+            className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded bg-neutral-900 hover:bg-neutral-800 text-white dark:bg-neutral-100 dark:hover:bg-white dark:text-neutral-950 font-mono text-xs font-medium transition-colors shrink-0 shadow-sm"
+          >
+            <Trophy className="w-4 h-4 text-amber-500" />
+            <span>Explorar Apuestas</span>
+            <ArrowUpRight className="w-4 h-4" />
+          </Link>
+        </div>
       </header>
 
       {/* Sección Principal de Proyectos */}

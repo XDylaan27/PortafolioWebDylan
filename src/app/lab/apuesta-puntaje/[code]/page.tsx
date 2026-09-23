@@ -371,10 +371,10 @@ export default function BetRoomPage({ params }: PageProps) {
           <div className="flex items-center gap-2">
             <Link
               href="/lab/apuesta-puntaje"
-              className="text-xs font-mono text-neutral-500 hover:text-neutral-300 flex items-center gap-1 transition-colors"
+              className="text-xs font-mono text-neutral-400 hover:text-white flex items-center gap-1.5 transition-colors"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
-              <span>Salas</span>
+              <span>Lista de Apuestas</span>
             </Link>
             <span className="text-neutral-700">/</span>
             <span className="text-xs font-mono uppercase tracking-wider text-neutral-400">
@@ -553,13 +553,21 @@ export default function BetRoomPage({ params }: PageProps) {
             </div>
           </div>
 
-          <div className="pt-4 text-center">
+          <div className="pt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
             <Link
               href="/lab/apuesta-puntaje"
-              className="inline-flex items-center gap-2 text-xs font-mono text-neutral-400 hover:text-white border border-neutral-800 hover:border-neutral-600 px-4 py-2.5 rounded bg-neutral-900 transition-colors"
+              className="inline-flex items-center gap-2 text-xs font-mono text-neutral-200 hover:text-white border border-neutral-700 hover:border-neutral-500 px-4 py-2.5 rounded bg-neutral-900 transition-colors shadow-sm"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Volver a la Lista de Apuestas</span>
+            </Link>
+
+            <Link
+              href="/lab/apuesta-puntaje?create=true"
+              className="inline-flex items-center gap-2 text-xs font-mono text-neutral-400 hover:text-white border border-neutral-800 hover:border-neutral-600 px-4 py-2.5 rounded bg-neutral-950 transition-colors"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span>Crear otra apuesta</span>
+              <span>Crear nueva apuesta</span>
             </Link>
           </div>
         </div>

@@ -2,6 +2,48 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { generateRoomCode, hashPassword } from '@/lib/bets';
 
+// GET: Listar todas las salas de apuestas
+export async function GET() {
+  try {
+    const { data: rooms, error } = await supabase
+      .from('bet_rooms')
+      .select(`
+        id,
+        code,
+        title,
+        description,
+        creator_name,
+        status,
+        final_score,
+        created_at,
+        bet_participants(count)
+      `)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      return NextResponse.json({ error: 'Error al consultar las apuestas.' }, { status: 500 });
+    }
+
+    const formatted = (rooms || []).map((r: any) => ({
+      id: r.id,
+      code: r.code,
+      title: r.title,
+      description: r.description,
+      creator_name: r.creator_name,
+      status: r.status,
+      final_score: r.final_score,
+      created_at: r.created_at,
+      participantsCount: r.bet_participants?.[0]?.count ?? 0,
+    }));
+
+    return NextResponse.json({ rooms: formatted });
+  } catch (error) {
+    console.error('Error en GET /api/bets:', error);
+    return NextResponse.json({ error: 'Error interno del servidor.' }, { status: 500 });
+  }
+}
+
+// POST: Crear una nueva sala de apuesta
 export async function POST(request: Request) {
   try {
     const body = await request.json();
