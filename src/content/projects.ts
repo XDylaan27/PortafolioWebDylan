@@ -16,6 +16,17 @@ export interface Project {
 
 export const PROJECTS: Project[] = [
   {
+    slug: 'apuesta-puntaje',
+    title: 'Apuesta & Quiniela de Puntajes',
+    category: 'web-app',
+    summary: 'Salas de pronósticos en tiempo real con sincronización Supabase, puntajes secretos y resolución por clave.',
+    description: 'Aplicación colaborativa donde amigos crean salas de predicciones numéricas, envían pronósticos ocultos y ven en vivo cómo se revela al participante más cercano cuando el creador ingresa el resultado oficial.',
+    year: '2026',
+    status: 'live',
+    tags: ['Supabase', 'Realtime', 'Next.js', 'TypeScript', 'Tailwind'],
+    featured: true,
+  },
+  {
     slug: 'template-lab',
     title: 'Template de Experimento',
     category: 'tool',
