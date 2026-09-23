@@ -13,6 +13,7 @@ import {
   ArrowRight,
   ShieldCheck,
   Users,
+  Eye,
   EyeOff,
   History,
   AlertCircle,
@@ -64,6 +65,7 @@ export default function ApuestaPuntajeHome() {
   const [description, setDescription] = useState('');
   const [creatorName, setCreatorName] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -322,14 +324,25 @@ export default function ApuestaPuntajeHome() {
                 <KeyRound className="w-3.5 h-3.5 text-amber-400" />
                 <span>Contraseña del Administrador *</span>
               </label>
-              <input
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Clave para ingresar el resultado final"
-                className="w-full bg-neutral-950 border border-neutral-800 rounded px-3.5 py-2.5 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500 font-mono"
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Clave para ingresar el resultado final"
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded px-3.5 py-2.5 pr-10 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-neutral-500 font-mono"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-white transition-colors p-1 cursor-pointer"
+                  aria-label={showPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
+                  title={showPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
 
             <div className="space-y-1.5 md:col-span-2">

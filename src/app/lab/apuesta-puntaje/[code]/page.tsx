@@ -12,6 +12,7 @@ import {
   Award,
   Lock,
   LockOpen,
+  Eye,
   EyeOff,
   Users,
   User,
@@ -58,6 +59,7 @@ export default function BetRoomPage({ params }: PageProps) {
   // Estado del creador / resolución
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [adminPassword, setAdminPassword] = useState('');
+  const [showAdminPassword, setShowAdminPassword] = useState(false);
   const [finalScoreInput, setFinalScoreInput] = useState('');
   const [isResolving, setIsResolving] = useState(false);
   const [resolveError, setResolveError] = useState<string | null>(null);
@@ -715,14 +717,25 @@ export default function BetRoomPage({ params }: PageProps) {
                         <KeyRound className="w-3 h-3 text-amber-400" />
                         <span>Contraseña del Creador</span>
                       </label>
-                      <input
-                        type="password"
-                        required
-                        value={adminPassword}
-                        onChange={(e) => setAdminPassword(e.target.value)}
-                        placeholder="Contraseña definida al crear la sala"
-                        className="w-full bg-neutral-900 border border-neutral-800 rounded px-3 py-2 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-amber-500 font-mono"
-                      />
+                      <div className="relative">
+                        <input
+                          type={showAdminPassword ? 'text' : 'password'}
+                          required
+                          value={adminPassword}
+                          onChange={(e) => setAdminPassword(e.target.value)}
+                          placeholder="Contraseña definida al crear la sala"
+                          className="w-full bg-neutral-900 border border-neutral-800 rounded px-3 py-2 pr-8 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-amber-500 font-mono"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowAdminPassword(!showAdminPassword)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-white transition-colors p-0.5 cursor-pointer"
+                          aria-label={showAdminPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
+                          title={showAdminPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
+                        >
+                          {showAdminPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
                     </div>
 
                     <div className="space-y-1">
