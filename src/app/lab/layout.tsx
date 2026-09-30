@@ -1,6 +1,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
+import AuthWidget from '@/components/AuthWidget';
 
 export default function LabLayout({
   children,
@@ -18,9 +19,12 @@ export default function LabLayout({
           <ArrowLeft className="w-4 h-4" />
           <span>Volver al portafolio</span>
         </Link>
-        <div className="flex items-center gap-2 text-neutral-500">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-          <span>Lab Environment</span>
+        <div className="flex items-center gap-4 text-neutral-500">
+          <div className="hidden sm:flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+            <span>Lab Environment</span>
+          </div>
+          <AuthWidget />
         </div>
       </header>
 

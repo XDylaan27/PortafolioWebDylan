@@ -16,6 +16,17 @@ export interface Project {
 
 export const PROJECTS: Project[] = [
   {
+    slug: 'pedidos-amigos',
+    title: 'Pedidos con Amigos & Recordatorios',
+    category: 'web-app',
+    summary: 'Control personal de encargos compartidos, artículos con fotos en la nube, estado de pago y recordatorios.',
+    description: 'Gestiona tus pedidos hechos a través de amigos: revisa qué pedidos están en curso, consulta el historial completo por cada amigo, sube capturas o fotos opcionales por artículo, controla pagos y programa notificaciones para no olvidar registrar tus compras.',
+    year: '2026',
+    status: 'live',
+    tags: ['Supabase Auth', 'Storage', 'RLS', 'PWA', 'Notificaciones'],
+    featured: true,
+  },
+  {
     slug: 'apuesta-puntaje',
     title: 'Apuesta & Quiniela de Puntajes',
     category: 'web-app',

@@ -63,10 +63,22 @@ export async function POST(request: Request) {
       );
     }
 
-    const trimmedTitle = title.trim();
-    const trimmedCreator = (creatorName && typeof creatorName === 'string' && creatorName.trim()) 
-      ? creatorName.trim() 
-      : 'Creador';
+    const trimmedTitle = title.trim().slice(0, 120);
+    const trimmedDescription =
+      description && typeof description === 'string' && description.trim()
+        ? description.trim().slice(0, 500)
+        : null;
+    const trimmedCreator =
+      creatorName && typeof creatorName === 'string' && creatorName.trim()
+        ? creatorName.trim().slice(0, 60)
+        : 'Creador';
+
+    if (password.length > 128) {
+      return NextResponse.json(
+        { error: 'La contraseña excede la longitud máxima permitida.' },
+        { status: 400 }
+      );
+    }
 
     const passwordHash = await hashPassword(password);
 
@@ -81,7 +93,7 @@ export async function POST(request: Request) {
         .insert({
           code: candidateCode,
           title: trimmedTitle,
-          description: description?.trim() || null,
+          description: trimmedDescription,
           creator_name: trimmedCreator,
           password_hash: passwordHash,
           status: 'open',

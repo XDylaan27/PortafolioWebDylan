@@ -6,11 +6,17 @@ interface Params {
   params: Promise<{ code: string }>;
 }
 
+const VALID_CODE_REGEX = /^[A-Z0-9]{4,10}$/;
+
 // GET: Obtener estado de la sala y participantes
 export async function GET(request: Request, { params }: Params) {
   try {
     const { code } = await params;
-    const roomCode = code?.toUpperCase();
+    const roomCode = code?.trim().toUpperCase();
+
+    if (!roomCode || !VALID_CODE_REGEX.test(roomCode)) {
+      return NextResponse.json({ error: 'Código de sala inválido.' }, { status: 400 });
+    }
 
     // 1. Obtener la sala
     const { data: room, error: roomError } = await supabase
@@ -66,7 +72,12 @@ export async function GET(request: Request, { params }: Params) {
 export async function POST(request: Request, { params }: Params) {
   try {
     const { code } = await params;
-    const roomCode = code?.toUpperCase();
+    const roomCode = code?.trim().toUpperCase();
+
+    if (!roomCode || !VALID_CODE_REGEX.test(roomCode)) {
+      return NextResponse.json({ error: 'Código de sala inválido.' }, { status: 400 });
+    }
+
     const body = await request.json();
     const { name, score } = body;
 
@@ -74,12 +85,12 @@ export async function POST(request: Request, { params }: Params) {
       return NextResponse.json({ error: 'El nombre es obligatorio.' }, { status: 400 });
     }
 
-    if (score === undefined || score === null || isNaN(Number(score))) {
-      return NextResponse.json({ error: 'Debes ingresar un puntaje válido.' }, { status: 400 });
+    const numericScore = Number(score);
+    if (score === undefined || score === null || !Number.isFinite(numericScore) || Math.abs(numericScore) > 1e9) {
+      return NextResponse.json({ error: 'Debes ingresar un puntaje numérico válido.' }, { status: 400 });
     }
 
-    const trimmedName = name.trim();
-    const numericScore = Number(score);
+    const trimmedName = name.trim().slice(0, 60);
 
     // 1. Verificar existencia y estado de la sala
     const { data: room, error: roomError } = await supabase
@@ -128,59 +139,51 @@ export async function POST(request: Request, { params }: Params) {
   }
 }
 
-// PATCH: Resolver la apuesta (Solo creador con contraseña)
+// PATCH: Resolver la apuesta (Solo creador con contraseña verificada en PostgreSQL vía RPC seguro)
 export async function PATCH(request: Request, { params }: Params) {
   try {
     const { code } = await params;
-    const roomCode = code?.toUpperCase();
+    const roomCode = code?.trim().toUpperCase();
+
+    if (!roomCode || !VALID_CODE_REGEX.test(roomCode)) {
+      return NextResponse.json({ error: 'Código de sala inválido.' }, { status: 400 });
+    }
+
     const body = await request.json();
     const { password, finalScore } = body;
 
-    if (!password || typeof password !== 'string') {
+    if (!password || typeof password !== 'string' || password.length > 128) {
       return NextResponse.json({ error: 'Ingresa la contraseña del creador.' }, { status: 400 });
     }
 
-    if (finalScore === undefined || finalScore === null || isNaN(Number(finalScore))) {
+    const numericFinalScore = Number(finalScore);
+    if (finalScore === undefined || finalScore === null || !Number.isFinite(numericFinalScore) || Math.abs(numericFinalScore) > 1e9) {
       return NextResponse.json({ error: 'Ingresa el resultado final oficial.' }, { status: 400 });
     }
 
-    const numericFinalScore = Number(finalScore);
+    const providedHash = await hashPassword(password);
 
-    // 1. Obtener la sala con su password_hash
-    const { data: room, error: roomError } = await supabase
-      .from('bet_rooms')
-      .select('id, password_hash, status')
-      .eq('code', roomCode)
-      .single();
+    const { data: rpcResult, error: rpcError } = await supabase.rpc('resolve_bet_room', {
+      p_code: roomCode,
+      p_password_hash: providedHash,
+      p_final_score: numericFinalScore,
+    });
 
-    if (roomError || !room) {
+    if (rpcError || !rpcResult) {
+      return NextResponse.json({ error: 'No se pudo actualizar el resultado de la sala.' }, { status: 500 });
+    }
+
+    if (rpcResult.error === 'not_found') {
       return NextResponse.json({ error: 'Sala no encontrada.' }, { status: 404 });
     }
 
-    // 2. Verificar contraseña
-    const providedHash = await hashPassword(password);
-    if (providedHash !== room.password_hash) {
+    if (rpcResult.error === 'unauthorized') {
       return NextResponse.json({ error: 'Contraseña incorrecta. Solo el creador puede finalizar la apuesta.' }, { status: 401 });
-    }
-
-    // 3. Actualizar la sala como finalizada con el resultado oficial
-    const { data: updatedRoom, error: updateError } = await supabase
-      .from('bet_rooms')
-      .update({
-        status: 'finished',
-        final_score: numericFinalScore,
-      })
-      .eq('id', room.id)
-      .select('id, code, title, status, final_score')
-      .single();
-
-    if (updateError || !updatedRoom) {
-      return NextResponse.json({ error: 'No se pudo actualizar el resultado de la sala.' }, { status: 500 });
     }
 
     return NextResponse.json({
       success: true,
-      room: updatedRoom,
+      room: rpcResult.room,
     });
   } catch (error) {
     console.error('Error en PATCH /api/bets/[code]:', error);

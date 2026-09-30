@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { PROJECTS, ProjectCategory } from '@/content/projects';
+import AuthWidget from '@/components/AuthWidget';
 import { ArrowUpRight, FolderGit2, Sparkles, Terminal, Code2, Layers, Mail, ExternalLink, Trophy } from 'lucide-react';
 
 const CATEGORIES: { key: 'all' | ProjectCategory; label: string }[] = [
@@ -33,7 +34,7 @@ export default function HomePage() {
               Dylan
             </h1>
           </div>
-          <div className="flex items-center gap-4 text-sm font-mono text-neutral-500">
+          <div className="flex flex-wrap items-center gap-4 text-sm font-mono text-neutral-500">
             <span className="flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
               Disponible para proyectos
@@ -45,6 +46,8 @@ export default function HomePage() {
             >
               contacto
             </a>
+            <span className="text-neutral-300 dark:text-neutral-700">/</span>
+            <AuthWidget />
           </div>
         </div>
 
