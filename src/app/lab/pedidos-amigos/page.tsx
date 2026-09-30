@@ -6,13 +6,11 @@ import type { User } from '@supabase/supabase-js';
 import {
   Bell,
   BellRing,
-  Check,
   CheckCircle2,
   ChevronLeft,
   Clock,
   DollarSign,
   Edit3,
-  ExternalLink,
   Image as ImageIcon,
   Loader2,
   Package,
@@ -76,7 +74,7 @@ interface DraftOrderItem {
   existingId?: string;
   name: string;
   quantity: string;
-  price: string;
+  price: string; // Almacenado formateado con puntos de mil (ej. "25.000")
   imageUrl: string | null;
   imageFile: File | null;
   previewUrl: string | null;
@@ -84,6 +82,40 @@ interface DraftOrderItem {
 
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
+
+/**
+ * Formatea una cadena de dígitos o un número con puntos de mil y sin centavos.
+ * Ej: "15000" -> "15.000", 1250000 -> "1.250.000"
+ */
+function formatInputPriceWithDots(raw: string): string {
+  const digits = raw.replace(/\D/g, '').replace(/^0+(?=\d)/, '');
+  if (!digits) return '';
+  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+}
+
+function formatNumberWithDots(value: number | string | null | undefined): string {
+  if (value === null || value === undefined || value === '') return '0';
+  const rounded = Math.round(Number(value));
+  if (!Number.isFinite(rounded)) return '0';
+  return String(rounded).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+}
+
+function parsePriceFromDots(formatted: string): number | null {
+  const digits = formatted.replace(/\D/g, '');
+  if (!digits) return null;
+  const num = parseInt(digits, 10);
+  return Number.isFinite(num) ? Math.min(9999999, Math.max(0, num)) : null;
+}
+
+function toLocalDateAndTime(isoString: string): { date: string; time: string } {
+  const d = new Date(isoString);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  const hh = String(d.getHours()).padStart(2, '0');
+  const min = String(d.getMinutes()).padStart(2, '0');
+  return { date: `${yyyy}-${mm}-${dd}`, time: `${hh}:${min}` };
+}
 
 function createEmptyDraftItem(): DraftOrderItem {
   return {
@@ -111,7 +143,7 @@ export default function PedidosAmigosPage() {
   const [orders, setOrders] = useState<FriendOrder[]>([]);
   const [reminders, setReminders] = useState<OrderReminder[]>([]);
 
-  // Mensajes de feedback
+  // Mensajes de feedback flotantes
   const [feedback, setFeedback] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
 
   // Modal: Nuevo Amigo
@@ -124,15 +156,15 @@ export default function PedidosAmigosPage() {
   const orderDialogRef = useRef<HTMLDialogElement | null>(null);
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   const [orderFriendId, setOrderFriendId] = useState('');
-  const [inlineFriendName, setInlineFriendName] = useState('');
   const [orderStoreName, setOrderStoreName] = useState('');
   const [orderNotes, setOrderNotes] = useState('');
   const [orderIsPaid, setOrderIsPaid] = useState(false);
   const [draftItems, setDraftItems] = useState<DraftOrderItem[]>([createEmptyDraftItem()]);
   const [savingOrder, setSavingOrder] = useState(false);
 
-  // Modal: Recordatorio ("¿Cuándo vas a hacer pedido?")
+  // Modal: Crear / Editar Recordatorio ("¿Cuándo vas a hacer pedido?")
   const reminderDialogRef = useRef<HTMLDialogElement | null>(null);
+  const [editingReminderId, setEditingReminderId] = useState<string | null>(null);
   const [reminderDate, setReminderDate] = useState('');
   const [reminderTime, setReminderTime] = useState('');
   const [reminderFriendId, setReminderFriendId] = useState('');
@@ -148,7 +180,7 @@ export default function PedidosAmigosPage() {
     setFeedback({ type, text });
     setTimeout(() => {
       setFeedback((prev) => (prev?.text === text ? null : prev));
-    }, 5000);
+    }, 4500);
   };
 
   // Cargar datos del usuario autenticado
@@ -306,7 +338,6 @@ export default function PedidosAmigosPage() {
           .eq('user_id', user.id);
       }
 
-      // Actualizar estado local
       const dueIds = new Set(due.map((d) => d.id));
       setReminders((prev) =>
         prev.map((r) => (dueIds.has(r.id) ? { ...r, notified: true } : r))
@@ -348,7 +379,7 @@ export default function PedidosAmigosPage() {
   const calculateOrderTotal = (items: OrderItem[]) => {
     return items.reduce((acc, item) => {
       if (item.price === null || item.price === undefined) return acc;
-      return acc + Number(item.price) * Number(item.quantity || 1);
+      return acc + Math.round(Number(item.price)) * Number(item.quantity || 1);
     }, 0);
   };
 
@@ -374,6 +405,7 @@ export default function PedidosAmigosPage() {
       if (error) throw error;
 
       setFriends((prev) => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)));
+      setOrderFriendId((prev) => prev || data.id);
       setNewFriendName('');
       setNewFriendNotes('');
       friendDialogRef.current?.close();
@@ -416,8 +448,7 @@ export default function PedidosAmigosPage() {
   // --- Abrir modal para crear o editar pedido ---
   const openNewOrderModal = (preselectedFriendId?: string) => {
     setEditingOrderId(null);
-    setOrderFriendId(preselectedFriendId || friends[0]?.id || '__new__');
-    setInlineFriendName('');
+    setOrderFriendId(preselectedFriendId || friends[0]?.id || '');
     setOrderStoreName('');
     setOrderNotes('');
     setOrderIsPaid(false);
@@ -428,7 +459,6 @@ export default function PedidosAmigosPage() {
   const openEditOrderModal = (order: FriendOrder) => {
     setEditingOrderId(order.id);
     setOrderFriendId(order.friend_id);
-    setInlineFriendName('');
     setOrderStoreName(order.store_name);
     setOrderNotes(order.notes || '');
     setOrderIsPaid(order.is_paid);
@@ -440,7 +470,10 @@ export default function PedidosAmigosPage() {
           existingId: it.id,
           name: it.name,
           quantity: String(it.quantity || 1),
-          price: it.price !== null && it.price !== undefined ? String(it.price) : '',
+          price:
+            it.price !== null && it.price !== undefined
+              ? formatNumberWithDots(it.price)
+              : '',
           imageUrl: it.image_url,
           imageFile: null,
           previewUrl: it.image_url,
@@ -478,6 +511,11 @@ export default function PedidosAmigosPage() {
     e.preventDefault();
     if (!user) return;
 
+    if (!orderFriendId || friends.length === 0) {
+      showToast('error', 'Primero debes agregar un amigo para asociar el pedido.');
+      return;
+    }
+
     const validItems = draftItems.filter((it) => it.name.trim().length > 0);
     if (validItems.length === 0) {
       showToast('error', 'Agrega al menos un artículo a la lista de cosas que pediste.');
@@ -486,29 +524,7 @@ export default function PedidosAmigosPage() {
 
     setSavingOrder(true);
     try {
-      let targetFriendId = orderFriendId;
-
-      // Si eligió crear amigo rápido dentro del mismo modal
-      if (targetFriendId === '__new__' || friends.length === 0) {
-        const cleanInlineFriend = inlineFriendName.trim();
-        if (!cleanInlineFriend) {
-          throw new Error('Escribe el nombre de tu amigo para registrar el pedido.');
-        }
-        const { data: createdFriend, error: friendErr } = await supabase
-          .from('friend_contacts')
-          .insert({
-            user_id: user.id,
-            name: cleanInlineFriend.slice(0, 80),
-          })
-          .select('*')
-          .single();
-
-        if (friendErr || !createdFriend) {
-          throw new Error('No se pudo registrar al amigo.');
-        }
-        targetFriendId = createdFriend.id;
-      }
-
+      const targetFriendId = orderFriendId;
       const cleanStore = orderStoreName.trim()
         ? orderStoreName.trim().slice(0, 120)
         : 'Pedido Online';
@@ -517,7 +533,6 @@ export default function PedidosAmigosPage() {
       let currentOrderId = editingOrderId;
 
       if (!currentOrderId) {
-        // Crear nuevo pedido
         const { data: createdOrder, error: orderErr } = await supabase
           .from('friend_orders')
           .insert({
@@ -534,7 +549,6 @@ export default function PedidosAmigosPage() {
         if (orderErr || !createdOrder) throw orderErr || new Error('Error creando pedido.');
         currentOrderId = createdOrder.id;
       } else {
-        // Actualizar pedido existente
         const { error: updateErr } = await supabase
           .from('friend_orders')
           .update({
@@ -548,7 +562,6 @@ export default function PedidosAmigosPage() {
 
         if (updateErr) throw updateErr;
 
-        // Reemplazar lista de artículos del pedido de forma limpia
         await supabase
           .from('friend_order_items')
           .delete()
@@ -556,7 +569,6 @@ export default function PedidosAmigosPage() {
           .eq('user_id', user.id);
       }
 
-      // Procesar imágenes y preparar artículos
       const itemsToInsert = [];
       for (const item of validItems) {
         let finalImageUrl = item.imageUrl;
@@ -565,10 +577,7 @@ export default function PedidosAmigosPage() {
         }
 
         const parsedQty = Math.max(1, Math.min(9999, parseInt(item.quantity, 10) || 1));
-        const parsedPrice =
-          item.price.trim() !== '' && Number.isFinite(Number(item.price))
-            ? Math.max(0, Number(Number(item.price).toFixed(2)))
-            : null;
+        const parsedPrice = parsePriceFromDots(item.price);
 
         itemsToInsert.push({
           order_id: currentOrderId,
@@ -667,18 +676,24 @@ export default function PedidosAmigosPage() {
 
   // --- Recordatorios ("¿Cuándo vas a hacer pedido?") ---
   const openReminderModal = () => {
-    // Por defecto sugerir hoy en 1 hora o mañana a las 12:00
+    setEditingReminderId(null);
     const defaultDate = new Date(Date.now() + 60 * 60 * 1000);
-    const yyyy = defaultDate.getFullYear();
-    const mm = String(defaultDate.getMonth() + 1).padStart(2, '0');
-    const dd = String(defaultDate.getDate()).padStart(2, '0');
-    const hh = String(defaultDate.getHours()).padStart(2, '0');
-    const min = String(defaultDate.getMinutes()).padStart(2, '0');
+    const { date, time } = toLocalDateAndTime(defaultDate.toISOString());
 
-    setReminderDate(`${yyyy}-${mm}-${dd}`);
-    setReminderTime(`${hh}:${min}`);
+    setReminderDate(date);
+    setReminderTime(time);
     setReminderFriendId(selectedFriendId || '');
     setReminderNote('');
+    reminderDialogRef.current?.showModal();
+  };
+
+  const openEditReminderModal = (rem: OrderReminder) => {
+    setEditingReminderId(rem.id);
+    const { date, time } = toLocalDateAndTime(rem.remind_at);
+    setReminderDate(date);
+    setReminderTime(time);
+    setReminderFriendId(rem.friend_id || '');
+    setReminderNote(rem.note || '');
     reminderDialogRef.current?.showModal();
   };
 
@@ -709,35 +724,64 @@ export default function PedidosAmigosPage() {
 
     setSavingReminder(true);
     try {
-      if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+      if (
+        typeof window !== 'undefined' &&
+        'Notification' in window &&
+        Notification.permission === 'default'
+      ) {
         const perm = await Notification.requestPermission();
         setNotificationPermission(perm);
       }
 
-      const { data, error } = await supabase
-        .from('friend_order_reminders')
-        .insert({
-          user_id: user.id,
-          friend_id: reminderFriendId || null,
-          remind_at: remindAtDate.toISOString(),
-          note: reminderNote.trim() ? reminderNote.trim().slice(0, 200) : null,
-          notified: false,
-        })
-        .select('*')
-        .single();
+      if (editingReminderId) {
+        const { data, error } = await supabase
+          .from('friend_order_reminders')
+          .update({
+            friend_id: reminderFriendId || null,
+            remind_at: remindAtDate.toISOString(),
+            note: reminderNote.trim() ? reminderNote.trim().slice(0, 200) : null,
+            notified: false,
+          })
+          .eq('id', editingReminderId)
+          .eq('user_id', user.id)
+          .select('*')
+          .single();
 
-      if (error || !data) throw error || new Error('Error guardando recordatorio.');
+        if (error || !data) throw error || new Error('Error actualizando recordatorio.');
 
-      setReminders((prev) =>
-        [...prev, data].sort(
-          (a, b) => new Date(a.remind_at).getTime() - new Date(b.remind_at).getTime()
-        )
-      );
-      reminderDialogRef.current?.close();
-      showToast(
-        'success',
-        'Recordatorio programado. Te avisaremos: "¿Ya hiciste pedido? Regístralo".'
-      );
+        setReminders((prev) =>
+          prev
+            .map((r) => (r.id === editingReminderId ? data : r))
+            .sort((a, b) => new Date(a.remind_at).getTime() - new Date(b.remind_at).getTime())
+        );
+        reminderDialogRef.current?.close();
+        showToast('success', 'Recordatorio actualizado correctamente.');
+      } else {
+        const { data, error } = await supabase
+          .from('friend_order_reminders')
+          .insert({
+            user_id: user.id,
+            friend_id: reminderFriendId || null,
+            remind_at: remindAtDate.toISOString(),
+            note: reminderNote.trim() ? reminderNote.trim().slice(0, 200) : null,
+            notified: false,
+          })
+          .select('*')
+          .single();
+
+        if (error || !data) throw error || new Error('Error guardando recordatorio.');
+
+        setReminders((prev) =>
+          [...prev, data].sort(
+            (a, b) => new Date(a.remind_at).getTime() - new Date(b.remind_at).getTime()
+          )
+        );
+        reminderDialogRef.current?.close();
+        showToast(
+          'success',
+          'Recordatorio programado. Te avisaremos: "¿Ya hiciste pedido? Regístralo".'
+        );
+      }
     } catch (err: unknown) {
       showToast('error', err instanceof Error ? err.message : 'Error al guardar recordatorio.');
     } finally {
@@ -749,6 +793,7 @@ export default function PedidosAmigosPage() {
     if (!user) return;
     await supabase.from('friend_order_reminders').delete().eq('id', id).eq('user_id', user.id);
     setReminders((prev) => prev.filter((r) => r.id !== id));
+    showToast('success', 'Recordatorio eliminado.');
   };
 
   // --- Componente reutilizable de Tarjeta de Pedido ---
@@ -910,7 +955,7 @@ export default function PedidosAmigosPage() {
                     <p className="text-xs font-mono text-neutral-400">
                       Cant: {item.quantity}
                       {item.price !== null && item.price !== undefined && (
-                        <> &bull; ${Number(item.price).toFixed(2)} c/u</>
+                        <> &bull; ${formatNumberWithDots(item.price)} c/u</>
                       )}
                     </p>
                   </div>
@@ -918,7 +963,7 @@ export default function PedidosAmigosPage() {
 
                 {item.price !== null && item.price !== undefined && (
                   <div className="text-xs font-mono text-neutral-200 font-medium shrink-0">
-                    ${(Number(item.price) * Number(item.quantity || 1)).toFixed(2)}
+                    ${formatNumberWithDots(Math.round(Number(item.price)) * Number(item.quantity || 1))}
                   </div>
                 )}
               </div>
@@ -929,7 +974,7 @@ export default function PedidosAmigosPage() {
         {hasPrices && (
           <div className="pt-2 border-t border-neutral-800/60 flex items-center justify-between text-xs font-mono">
             <span className="text-neutral-400">Total estimado del pedido:</span>
-            <span className="text-sm text-white font-semibold">${total.toFixed(2)}</span>
+            <span className="text-sm text-white font-semibold">${formatNumberWithDots(total)}</span>
           </div>
         )}
       </article>
@@ -968,13 +1013,32 @@ export default function PedidosAmigosPage() {
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-10 space-y-8">
+      {/* Notificación Toast Flotante Superior (sin alterar el layout de la página) */}
+      {feedback && (
+        <div
+          role="status"
+          aria-live="polite"
+          className={`fixed top-16 left-1/2 -translate-x-1/2 z-50 w-[92vw] max-w-md px-4 py-3 rounded-lg border text-xs font-mono shadow-2xl backdrop-blur-md flex items-center justify-between gap-3 transition-all ${
+            feedback.type === 'error'
+              ? 'bg-neutral-950/95 border-red-500/50 text-red-300'
+              : 'bg-neutral-950/95 border-emerald-500/50 text-emerald-300'
+          }`}
+        >
+          <span>{feedback.text}</span>
+          <button
+            type="button"
+            onClick={() => setFeedback(null)}
+            className="text-current opacity-70 hover:opacity-100 cursor-pointer shrink-0"
+            aria-label="Cerrar notificación"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Encabezado y Acciones Rápidas */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-neutral-800 pb-8">
         <div className="space-y-2">
-          <div className="flex items-center gap-2 text-xs font-mono text-emerald-400">
-            <ShieldCheck className="w-3.5 h-3.5" />
-            <span>Sincronizado en Supabase Cloud</span>
-          </div>
           <h1 className="text-3xl md:text-4xl font-serif-editorial font-light text-white">
             Pedidos con Amigos
           </h1>
@@ -1012,26 +1076,6 @@ export default function PedidosAmigosPage() {
           </button>
         </div>
       </div>
-
-      {/* Mensaje Toast */}
-      {feedback && (
-        <div
-          className={`p-3.5 rounded border text-xs font-mono flex items-center justify-between ${
-            feedback.type === 'error'
-              ? 'bg-red-500/10 border-red-500/30 text-red-300'
-              : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
-          }`}
-        >
-          <span>{feedback.text}</span>
-          <button
-            type="button"
-            onClick={() => setFeedback(null)}
-            className="text-current opacity-70 hover:opacity-100 cursor-pointer"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
 
       {/* Pestañas de Navegación */}
       <div className="flex flex-wrap items-center gap-2 border-b border-neutral-800 pb-4">
@@ -1240,7 +1284,9 @@ export default function PedidosAmigosPage() {
                   <div className="space-y-4">
                     <h3 className="text-xs font-mono uppercase tracking-wider text-amber-400 flex items-center gap-2">
                       <Clock className="w-4 h-4" />
-                      <span>Pedidos en curso con {selectedFriend.name} ({selectedFriendOrders.active.length})</span>
+                      <span>
+                        Pedidos en curso con {selectedFriend.name} ({selectedFriendOrders.active.length})
+                      </span>
                     </h3>
                     {selectedFriendOrders.active.length === 0 ? (
                       <p className="text-xs font-mono text-neutral-500 p-4 border border-neutral-800/60 rounded">
@@ -1289,7 +1335,11 @@ export default function PedidosAmigosPage() {
                     Recordatorios de Pedidos
                   </h2>
                   <p className="text-xs text-neutral-400">
-                    Programa cuándo vas a hacer un pedido para recibir la notificación: <strong className="text-neutral-200">&ldquo;¿Ya hiciste pedido? Regístralo&rdquo;</strong>.
+                    Programa cuándo vas a hacer un pedido para recibir la notificación:{' '}
+                    <strong className="text-neutral-200">
+                      &ldquo;¿Ya hiciste pedido? Regístralo&rdquo;
+                    </strong>
+                    .
                   </p>
                 </div>
 
@@ -1368,7 +1418,16 @@ export default function PedidosAmigosPage() {
                           </p>
                         </div>
 
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => openEditReminderModal(rem)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded border border-neutral-700 hover:border-neutral-500 text-xs font-mono text-neutral-300 hover:text-white cursor-pointer"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                            <span>Editar</span>
+                          </button>
+
                           <button
                             type="button"
                             onClick={() => openNewOrderModal(rem.friend_id || undefined)}
@@ -1376,6 +1435,7 @@ export default function PedidosAmigosPage() {
                           >
                             Registrar pedido ahora
                           </button>
+
                           <button
                             type="button"
                             onClick={() => handleDeleteReminder(rem.id)}
@@ -1497,19 +1557,32 @@ export default function PedidosAmigosPage() {
               <label htmlFor="order-friend" className="block text-xs font-mono text-neutral-400">
                 ¿Qué amigo hace el pedido?
               </label>
-              <select
-                id="order-friend"
-                value={orderFriendId}
-                onChange={(e) => setOrderFriendId(e.target.value)}
-                className="w-full px-3 py-2 rounded border border-neutral-800 bg-neutral-900 text-sm font-mono text-white"
-              >
-                {friends.map((f) => (
-                  <option key={f.id} value={f.id}>
-                    {f.name}
-                  </option>
-                ))}
-                <option value="__new__">+ Agregar un nuevo amigo...</option>
-              </select>
+              {friends.length > 0 ? (
+                <select
+                  id="order-friend"
+                  value={orderFriendId}
+                  onChange={(e) => setOrderFriendId(e.target.value)}
+                  className="w-full px-3 py-2 rounded border border-neutral-800 bg-neutral-900 text-sm font-mono text-white"
+                >
+                  {friends.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    orderDialogRef.current?.close();
+                    friendDialogRef.current?.showModal();
+                  }}
+                  className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded border border-sky-500/40 bg-sky-500/10 hover:bg-sky-500/20 text-sky-300 text-xs font-mono transition-colors cursor-pointer"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  <span>Ir a agregar un amigo</span>
+                </button>
+              )}
             </div>
 
             <div className="space-y-1.5">
@@ -1528,24 +1601,6 @@ export default function PedidosAmigosPage() {
               />
             </div>
           </div>
-
-          {(orderFriendId === '__new__' || friends.length === 0) && (
-            <div className="space-y-1.5 p-3.5 rounded border border-sky-500/30 bg-sky-500/5">
-              <label htmlFor="inline-friend-name" className="block text-xs font-mono text-sky-300">
-                Nombre de tu nuevo amigo
-              </label>
-              <input
-                id="inline-friend-name"
-                type="text"
-                required
-                maxLength={80}
-                value={inlineFriendName}
-                onChange={(e) => setInlineFriendName(e.target.value)}
-                placeholder="Ej. Diego"
-                className="w-full px-3 py-2 rounded border border-neutral-800 bg-neutral-900 text-sm font-mono text-white"
-              />
-            </div>
-          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
             <div className="space-y-1.5">
@@ -1593,7 +1648,8 @@ export default function PedidosAmigosPage() {
             </div>
 
             <p className="text-[11px] font-mono text-neutral-500">
-              Tip: En cualquier artículo puedes subir una foto o pegar directamente una captura con <kbd className="px-1 py-0.5 bg-neutral-800 rounded">Ctrl+V</kbd>.
+              Tip: En cualquier artículo puedes subir una foto o pegar directamente una captura con{' '}
+              <kbd className="px-1 py-0.5 bg-neutral-800 rounded">Ctrl+V</kbd>.
             </p>
 
             <div className="space-y-3">
@@ -1669,17 +1725,17 @@ export default function PedidosAmigosPage() {
 
                     <div className="sm:col-span-2">
                       <input
-                        type="number"
-                        step="0.01"
-                        min={0}
+                        type="text"
+                        inputMode="numeric"
                         value={item.price}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          const formatted = formatInputPriceWithDots(e.target.value);
                           setDraftItems((prev) =>
                             prev.map((i) =>
-                              i.localId === item.localId ? { ...i, price: e.target.value } : i
+                              i.localId === item.localId ? { ...i, price: formatted } : i
                             )
-                          )
-                        }
+                          );
+                        }}
                         placeholder="Precio opc. ($)"
                         className="w-full px-2.5 py-1.5 rounded border border-neutral-800 bg-neutral-950 text-xs font-mono text-white"
                       />
@@ -1761,7 +1817,7 @@ export default function PedidosAmigosPage() {
         </form>
       </dialog>
 
-      {/* MODAL 3: AÑADIR RECORDATORIO ("¿Cuándo vas a hacer pedido?") */}
+      {/* MODAL 3: AÑADIR / EDITAR RECORDATORIO ("¿Cuándo vas a hacer pedido?") */}
       <dialog
         ref={reminderDialogRef}
         closedby="any"
@@ -1772,7 +1828,7 @@ export default function PedidosAmigosPage() {
           <div className="flex items-start justify-between border-b border-neutral-800 pb-3">
             <div>
               <span className="text-[11px] font-mono uppercase tracking-widest text-amber-400">
-                Notificación Programada
+                {editingReminderId ? 'Editar Recordatorio' : 'Notificación Programada'}
               </span>
               <h3 id="reminder-modal-title" className="text-xl font-serif-editorial mt-0.5">
                 ¿Cuándo vas a hacer pedido?
@@ -1788,7 +1844,9 @@ export default function PedidosAmigosPage() {
           </div>
 
           <p className="text-xs text-neutral-400 leading-relaxed">
-            Elige el día y la hora. Ese día te llegará una notificación preguntando: <strong className="text-white">&ldquo;¿Ya hiciste pedido? Regístralo&rdquo;</strong> para que no se te pase anotarlo.
+            Elige el día y la hora. Ese día te llegará una notificación preguntando:{' '}
+            <strong className="text-white">&ldquo;¿Ya hiciste pedido? Regístralo&rdquo;</strong>{' '}
+            para que no se te pase anotarlo.
           </p>
 
           <div className="grid grid-cols-2 gap-3">
@@ -1870,7 +1928,11 @@ export default function PedidosAmigosPage() {
               disabled={savingReminder}
               className="px-4 py-2 rounded bg-amber-400 hover:bg-amber-300 text-neutral-950 text-xs font-mono font-medium cursor-pointer disabled:opacity-50"
             >
-              {savingReminder ? 'Programando...' : 'Programar recordatorio'}
+              {savingReminder
+                ? 'Guardando...'
+                : editingReminderId
+                ? 'Guardar cambios'
+                : 'Programar recordatorio'}
             </button>
           </div>
         </form>
