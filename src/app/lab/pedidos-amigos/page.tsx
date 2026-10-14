@@ -143,8 +143,12 @@ export default function PedidosAmigosPage() {
   const [orders, setOrders] = useState<FriendOrder[]>([]);
   const [reminders, setReminders] = useState<OrderReminder[]>([]);
 
-  // Mensajes de feedback flotantes
-  const [feedback, setFeedback] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
+  // Mensajes de feedback flotantes (con opción de deshacer)
+  const [feedback, setFeedback] = useState<{
+    type: 'error' | 'success';
+    text: string;
+    onUndo?: () => void;
+  } | null>(null);
 
   // Modal: Nuevo Amigo
   const friendDialogRef = useRef<HTMLDialogElement | null>(null);
@@ -162,6 +166,14 @@ export default function PedidosAmigosPage() {
   const [draftItems, setDraftItems] = useState<DraftOrderItem[]>([createEmptyDraftItem()]);
   const [savingOrder, setSavingOrder] = useState(false);
 
+  // Modal: Confirmación para Eliminar Pedido y manejo de Deshacer
+  const confirmDeleteDialogRef = useRef<HTMLDialogElement | null>(null);
+  const [orderToDelete, setOrderToDelete] = useState<FriendOrder | null>(null);
+  const pendingDeleteRef = useRef<{
+    order: FriendOrder;
+    timerId: NodeJS.Timeout;
+  } | null>(null);
+
   // Modal: Crear / Editar Recordatorio ("¿Cuándo vas a hacer pedido?")
   const reminderDialogRef = useRef<HTMLDialogElement | null>(null);
   const [editingReminderId, setEditingReminderId] = useState<string | null>(null);
@@ -176,11 +188,11 @@ export default function PedidosAmigosPage() {
   const lightboxDialogRef = useRef<HTMLDialogElement | null>(null);
   const [lightboxImage, setLightboxImage] = useState<{ url: string; caption: string } | null>(null);
 
-  const showToast = (type: 'error' | 'success', text: string) => {
-    setFeedback({ type, text });
+  const showToast = (type: 'error' | 'success', text: string, onUndo?: () => void) => {
+    setFeedback({ type, text, onUndo });
     setTimeout(() => {
       setFeedback((prev) => (prev?.text === text ? null : prev));
-    }, 4500);
+    }, onUndo ? 7500 : 4500);
   };
 
   // Cargar datos del usuario autenticado
@@ -254,6 +266,7 @@ export default function PedidosAmigosPage() {
       orderDialogRef.current,
       reminderDialogRef.current,
       lightboxDialogRef.current,
+      confirmDeleteDialogRef.current,
     ].filter((d): d is HTMLDialogElement => d !== null);
 
     const handleBackdropClick = (event: MouseEvent) => {
@@ -274,6 +287,29 @@ export default function PedidosAmigosPage() {
     dialogs.forEach((d) => d.addEventListener('click', handleBackdropClick));
     return () => {
       dialogs.forEach((d) => d.removeEventListener('click', handleBackdropClick));
+    };
+  }, [user]);
+
+  // Asegurar que si hay un borrado pendiente al cerrar/recargar la pestaña, se ejecute en Supabase
+  useEffect(() => {
+    const flushPendingDelete = () => {
+      if (pendingDeleteRef.current && user) {
+        clearTimeout(pendingDeleteRef.current.timerId);
+        const id = pendingDeleteRef.current.order.id;
+        supabase
+          .from('friend_orders')
+          .delete()
+          .eq('id', id)
+          .eq('user_id', user.id)
+          .then();
+        pendingDeleteRef.current = null;
+      }
+    };
+
+    window.addEventListener('beforeunload', flushPendingDelete);
+    return () => {
+      window.removeEventListener('beforeunload', flushPendingDelete);
+      flushPendingDelete();
     };
   }, [user]);
 
@@ -658,20 +694,63 @@ export default function PedidosAmigosPage() {
     );
   };
 
-  const handleDeleteOrder = async (orderId: string) => {
-    if (!user) return;
-    const { error } = await supabase
-      .from('friend_orders')
-      .delete()
-      .eq('id', orderId)
-      .eq('user_id', user.id);
+  const requestDeleteOrder = (order: FriendOrder) => {
+    setOrderToDelete(order);
+    confirmDeleteDialogRef.current?.showModal();
+  };
 
-    if (error) {
-      showToast('error', 'Error al eliminar el pedido.');
-      return;
+  const handleConfirmDelete = () => {
+    if (!orderToDelete || !user) return;
+    const target = orderToDelete;
+    confirmDeleteDialogRef.current?.close();
+
+    // Si había un pedido anterior pendiente de borrado definitivo, ejecutarlo en Supabase
+    if (pendingDeleteRef.current) {
+      clearTimeout(pendingDeleteRef.current.timerId);
+      const prevId = pendingDeleteRef.current.order.id;
+      supabase
+        .from('friend_orders')
+        .delete()
+        .eq('id', prevId)
+        .eq('user_id', user.id)
+        .then();
+      pendingDeleteRef.current = null;
     }
-    setOrders((prev) => prev.filter((o) => o.id !== orderId));
-    showToast('success', 'Pedido eliminado.');
+
+    // Ocultar optimísticamente de la interfaz
+    setOrders((prev) => prev.filter((o) => o.id !== target.id));
+    setOrderToDelete(null);
+
+    // Programar borrado definitivo tras 7 segundos
+    const timerId = setTimeout(async () => {
+      await supabase
+        .from('friend_orders')
+        .delete()
+        .eq('id', target.id)
+        .eq('user_id', user.id);
+      if (pendingDeleteRef.current?.order.id === target.id) {
+        pendingDeleteRef.current = null;
+      }
+    }, 7000);
+
+    pendingDeleteRef.current = { order: target, timerId };
+
+    // Mostrar notificación flotante con opción Deshacer
+    showToast(
+      'success',
+      `Pedido "${target.store_name}" eliminado correctamente.`,
+      () => {
+        // Callback para deshacer
+        clearTimeout(timerId);
+        pendingDeleteRef.current = null;
+        setOrders((prev) =>
+          [target, ...prev].sort(
+            (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          )
+        );
+        showToast('success', 'Acción deshecha. El pedido ha sido restaurado.');
+      }
+    );
   };
 
   // --- Recordatorios ("¿Cuándo vas a hacer pedido?") ---
@@ -904,7 +983,7 @@ export default function PedidosAmigosPage() {
 
             <button
               type="button"
-              onClick={() => handleDeleteOrder(order.id)}
+              onClick={() => requestDeleteOrder(order)}
               className="p-1.5 rounded border border-transparent hover:border-red-500/30 text-neutral-500 hover:text-red-400 transition-colors cursor-pointer"
               title="Eliminar pedido"
             >
@@ -1018,21 +1097,35 @@ export default function PedidosAmigosPage() {
         <div
           role="status"
           aria-live="polite"
-          className={`fixed top-16 left-1/2 -translate-x-1/2 z-50 w-[92vw] max-w-md px-4 py-3 rounded-lg border text-xs font-mono shadow-2xl backdrop-blur-md flex items-center justify-between gap-3 transition-all ${
+          className={`fixed top-16 left-1/2 -translate-x-1/2 z-50 w-[92vw] max-w-lg px-4 py-3 rounded-lg border text-xs font-mono shadow-2xl backdrop-blur-md flex items-center justify-between gap-3 transition-all ${
             feedback.type === 'error'
               ? 'bg-neutral-950/95 border-red-500/50 text-red-300'
               : 'bg-neutral-950/95 border-emerald-500/50 text-emerald-300'
           }`}
         >
-          <span>{feedback.text}</span>
-          <button
-            type="button"
-            onClick={() => setFeedback(null)}
-            className="text-current opacity-70 hover:opacity-100 cursor-pointer shrink-0"
-            aria-label="Cerrar notificación"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <span className="truncate">{feedback.text}</span>
+          <div className="flex items-center gap-2 shrink-0">
+            {feedback.onUndo && (
+              <button
+                type="button"
+                onClick={() => {
+                  const undoFn = feedback.onUndo;
+                  if (undoFn) undoFn();
+                }}
+                className="px-2.5 py-1 rounded bg-white text-neutral-950 font-semibold hover:bg-neutral-200 transition-colors cursor-pointer text-xs uppercase tracking-wider"
+              >
+                Deshacer
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setFeedback(null)}
+              className="text-current opacity-70 hover:opacity-100 cursor-pointer p-0.5"
+              aria-label="Cerrar notificación"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       )}
 
@@ -1965,6 +2058,71 @@ export default function PedidosAmigosPage() {
                 alt={lightboxImage.caption}
                 className="max-h-[72vh] w-auto object-contain"
               />
+            </div>
+          </div>
+        )}
+      </dialog>
+
+      {/* MODAL 5: CONFIRMACIÓN PARA ELIMINAR PEDIDO */}
+      <dialog
+        ref={confirmDeleteDialogRef}
+        closedby="any"
+        aria-labelledby="confirm-delete-title"
+        className="m-auto w-full max-w-md rounded-lg border border-neutral-800 bg-neutral-950 text-neutral-100 p-0 shadow-2xl backdrop:bg-black/80"
+      >
+        {orderToDelete && (
+          <div className="p-6 space-y-4">
+            <div className="flex items-start justify-between border-b border-neutral-800 pb-3">
+              <div className="space-y-0.5">
+                <span className="text-[11px] font-mono uppercase tracking-widest text-red-400">
+                  Confirmación requerida
+                </span>
+                <h3 id="confirm-delete-title" className="text-xl font-serif-editorial text-white">
+                  ¿Eliminar este pedido?
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => confirmDeleteDialogRef.current?.close()}
+                className="text-neutral-400 hover:text-white cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-neutral-300 leading-relaxed font-mono">
+              ¿Estás seguro de que deseas eliminar el pedido{' '}
+              <strong className="text-white">&ldquo;{orderToDelete.store_name}&rdquo;</strong>
+              {friendsMap.get(orderToDelete.friend_id) && (
+                <>
+                  {' '}encargado con{' '}
+                  <strong className="text-sky-400">
+                    {friendsMap.get(orderToDelete.friend_id)?.name}
+                  </strong>
+                </>
+              )}
+              ? Se eliminarán sus{' '}
+              <strong className="text-white">
+                {orderToDelete.friend_order_items?.length || 0}
+              </strong>{' '}
+              artículos asociados.
+            </p>
+
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-neutral-800">
+              <button
+                type="button"
+                onClick={() => confirmDeleteDialogRef.current?.close()}
+                className="px-4 py-2 rounded border border-neutral-800 hover:border-neutral-700 text-xs font-mono text-neutral-400 hover:text-neutral-200 cursor-pointer transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                className="px-4 py-2 rounded bg-red-600 hover:bg-red-500 text-white text-xs font-mono font-medium cursor-pointer transition-colors shadow-sm"
+              >
+                Sí, eliminar pedido
+              </button>
             </div>
           </div>
         )}
