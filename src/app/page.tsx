@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { PROJECTS, ProjectCategory } from '@/content/projects';
 import AuthWidget from '@/components/AuthWidget';
+import SupabaseKeepAlive from '@/components/SupabaseKeepAlive';
 import { ArrowUpRight, FolderGit2, Sparkles, Terminal, Code2, Layers, Mail, ExternalLink, Trophy } from 'lucide-react';
 
 const CATEGORIES: { key: 'all' | ProjectCategory; label: string }[] = [
@@ -193,8 +194,10 @@ export default function HomePage() {
 
       {/* Footer Editorial */}
       <footer className="pt-10 border-t border-neutral-200 dark:border-neutral-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 text-xs font-mono text-neutral-500">
-        <div>
-          © {new Date().getFullYear()} Dylan. Todos los derechos reservados.
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+          <span>© {new Date().getFullYear()} Dylan. Todos los derechos reservados.</span>
+          <span className="hidden sm:inline text-neutral-300 dark:text-neutral-700">•</span>
+          <SupabaseKeepAlive />
         </div>
         <div className="flex items-center gap-6">
           <a
