@@ -361,15 +361,15 @@ export default function CodigoDeClaseNodePage() {
           ==================================================================== */}
       <section className="flex-1 h-full overflow-hidden bg-[#1e1e1e] relative flex flex-col">
         
-        {/* Botón flotante para reabrir el explorador cuando esté cerrado */}
+        {/* Botón flotante para reabrir el explorador cuando esté cerrado (solo icono) */}
         {!isExplorerOpen && (
           <button
             onClick={() => setIsExplorerOpen(true)}
-            className="absolute top-2 left-2 z-30 flex items-center gap-1.5 px-2.5 py-1 rounded bg-[#252526]/90 hover:bg-[#333333] border border-[#444444] text-neutral-200 text-xs shadow-lg backdrop-blur-xs transition-colors"
+            className="absolute top-1.5 left-1.5 z-30 p-1.5 rounded bg-[#252526]/90 hover:bg-[#333333] border border-[#444444] text-neutral-200 shadow-lg backdrop-blur-xs transition-colors"
             title="Abrir explorador"
+            aria-label="Abrir explorador"
           >
-            <PanelLeftOpen className="w-3.5 h-3.5 text-teal-400" />
-            <span className="font-sans font-medium text-[11px]">Explorador</span>
+            <PanelLeftOpen className="w-4 h-4 text-teal-400" />
           </button>
         )}
 
