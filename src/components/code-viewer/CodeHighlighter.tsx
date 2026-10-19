@@ -128,8 +128,8 @@ export default function CodeHighlighter({
 
   return (
     <div
-      className={`min-w-full font-mono select-text py-2 ${
-        wordWrap ? 'whitespace-pre-wrap break-words' : 'whitespace-pre'
+      className={`font-mono select-text py-2 ${
+        wordWrap ? 'w-full whitespace-pre-wrap break-words' : 'w-max min-w-full whitespace-pre'
       }`}
       style={{
         fontSize: `${fontSize}px`,
@@ -140,9 +140,9 @@ export default function CodeHighlighter({
         const lineNum = idx + 1;
         return (
           <div key={idx} className="flex hover:bg-white/[0.03] group">
-            {/* Número de línea estilo VS Code */}
+            {/* Número de línea fijo horizontalmente (sticky left) */}
             <span
-              className="w-10 sm:w-12 shrink-0 select-none text-right pr-3 text-[#858585] border-r border-[#333333] group-hover:text-[#c6c6c6]"
+              className="sticky left-0 z-10 bg-[#1e1e1e] w-10 sm:w-12 shrink-0 select-none text-right pr-3 text-[#858585] border-r border-[#333333] group-hover:text-[#c6c6c6] group-hover:bg-[#252526]"
             >
               {lineNum}
             </span>
