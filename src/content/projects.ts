@@ -16,6 +16,28 @@ export interface Project {
 
 export const PROJECTS: Project[] = [
   {
+    slug: 'codigo-node',
+    title: 'Visor de Código Node — CRUD MySQL',
+    category: 'tool',
+    summary: 'Visor de código estático optimizado para celular horizontal con tema VS Code Dark+.',
+    description: 'Explorador y visor de código de la clase Node.js CRUD con MySQL y Express. Permite navegar entre carpetas y archivos con colores de VS Code.',
+    year: '2026',
+    status: 'live',
+    tags: ['Node.js', 'Express', 'MySQL', 'VS Code Theme', 'Mobile IDE'],
+    featured: true,
+  },
+  {
+    slug: 'calculadora',
+    title: 'HyperCalc — Calculadora Hiper-Animada',
+    category: 'tool',
+    summary: 'Calculadora táctil con animaciones de React Bits (Spotlight, ClickSpark, Magnet, BorderBeam), punto de mil y pegado rápido.',
+    description: 'Calculadora personal inspirada en componentes interactivos de reactbits.dev. Cuenta con física magnética en botones, haz de luz láser perimetral, ráfagas de chispas en cada pulsación, formateo automático cada tres ceros, atajos completos de teclado y detector inteligente para pegar números directamente desde el portapapeles.',
+    year: '2026',
+    status: 'live',
+    tags: ['React Bits', 'Canvas Particles', 'Web Audio', 'Next.js 15', 'Tailwind CSS'],
+    featured: true,
+  },
+  {
     slug: 'pedidos-amigos',
     title: 'Pedidos con Amigos & Recordatorios',
     category: 'web-app',
