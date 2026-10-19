@@ -2,12 +2,26 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, ChevronRight, ChevronDown, Folder, FolderOpen, FileCode, Settings, Globe } from 'lucide-react';
+import {
+  MoreVertical,
+  PanelLeftClose,
+  PanelLeftOpen,
+  ArrowLeft,
+  ChevronRight,
+  ChevronDown,
+  Folder,
+  FolderOpen,
+  FileCode,
+  Settings,
+  Globe
+} from 'lucide-react';
 import { NODE_CLASS_FILES, FileItem } from '@/content/nodeClassCode';
 import CodeHighlighter from '@/components/code-viewer/CodeHighlighter';
 
 export default function CodigoDeClaseNodePage() {
   const [selectedPath, setSelectedPath] = useState<string>('src/controllers/productos.controller.js');
+  const [isExplorerOpen, setIsExplorerOpen] = useState<boolean>(true);
+  const [menuOpen, setMenuOpen] = useState<boolean>(false);
   const [openFolders, setOpenFolders] = useState<Record<string, boolean>>({
     'src': true,
     'src/config': true,
@@ -16,10 +30,10 @@ export default function CodigoDeClaseNodePage() {
   });
   const [fontSize, setFontSize] = useState<number>(12);
   const [wordWrap, setWordWrap] = useState<boolean>(false);
-  const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
 
   // Archivo actual
-  const activeFile: FileItem = NODE_CLASS_FILES.find((f) => f.path === selectedPath) || NODE_CLASS_FILES[0];
+  const activeFile: FileItem =
+    NODE_CLASS_FILES.find((f) => f.path === selectedPath) || NODE_CLASS_FILES[0];
 
   const toggleFolder = (folderPath: string) => {
     setOpenFolders((prev) => ({
@@ -30,125 +44,138 @@ export default function CodigoDeClaseNodePage() {
 
   const selectFile = (path: string) => {
     setSelectedPath(path);
-    setSidebarOpen(false);
   };
 
   const getFileIcon = (fileName: string) => {
     if (fileName.endsWith('.js')) {
-      return <span className="text-[10px] font-bold px-1 py-0.5 rounded bg-yellow-500/20 text-yellow-400">JS</span>;
+      return (
+        <span className="text-[10px] font-bold px-1 py-0.5 rounded bg-yellow-500/20 text-yellow-400">
+          JS
+        </span>
+      );
     }
     if (fileName.endsWith('.json')) {
-      return <span className="text-[10px] font-bold px-1 py-0.5 rounded bg-amber-500/20 text-amber-400">{'{}'}</span>;
+      return (
+        <span className="text-[10px] font-bold px-1 py-0.5 rounded bg-amber-500/20 text-amber-400">
+          {'{}'}
+        </span>
+      );
     }
     if (fileName.endsWith('.env')) {
-      return <Settings className="w-3.5 h-3.5 text-teal-400" />;
+      return <Settings className="w-3.5 h-3.5 text-teal-400 shrink-0" />;
     }
     if (fileName.endsWith('.http')) {
-      return <Globe className="w-3.5 h-3.5 text-purple-400" />;
+      return <Globe className="w-3.5 h-3.5 text-purple-400 shrink-0" />;
     }
-    return <FileCode className="w-3.5 h-3.5 text-neutral-400" />;
+    return <FileCode className="w-3.5 h-3.5 text-neutral-400 shrink-0" />;
   };
 
   return (
-    <div className="h-[100dvh] w-screen bg-[#1e1e1e] text-[#d4d4d4] flex flex-col overflow-hidden font-sans select-none">
+    <div className="fixed inset-0 w-full h-[100dvh] bg-[#1e1e1e] text-[#d4d4d4] flex overflow-hidden font-sans select-none z-50">
       
       {/* ====================================================================
-          BARRA SUPERIOR (HEADER COMPACTO)
+          COLUMNA IZQUIERDA: EXPLORADOR DE ARCHIVOS (COLAPSABLE)
           ==================================================================== */}
-      <header className="h-8 min-h-[32px] bg-[#333333] border-b border-[#2d2d2d] px-2 flex items-center justify-between text-xs z-30">
-        <div className="flex items-center gap-2 overflow-hidden">
-          {/* Botón de volver */}
-          <Link
-            href="/"
-            className="flex items-center gap-1 text-neutral-400 hover:text-white px-1.5 py-0.5 rounded hover:bg-white/10 transition-colors"
-            title="Volver al portafolio"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-          </Link>
-
-          {/* Botón de toggle en modo vertical */}
-          <button
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="sm:hidden px-2 py-0.5 rounded bg-[#252526] border border-[#444] text-[11px] text-white"
-          >
-            Carpetas
-          </button>
-
-          {/* Migas de pan / Ruta activa */}
-          <div className="hidden sm:flex items-center gap-1.5 font-mono text-[11px] text-neutral-300 truncate">
-            <span className="text-teal-400 font-semibold">01-clase-CRUD-node</span>
-            <span className="text-neutral-600">/</span>
-            <span className="text-neutral-100">{activeFile.path}</span>
-          </div>
-          <span className="sm:hidden font-mono text-[11px] text-neutral-200 truncate">
-            {activeFile.name}
-          </span>
-        </div>
-
-        {/* Controles: A- / A+ y Wrap */}
-        <div className="flex items-center gap-1.5 shrink-0 font-mono">
-          <div className="flex items-center bg-[#252526] border border-[#444] rounded overflow-hidden text-[11px]">
-            <button
-              onClick={() => setFontSize((s) => Math.max(9, s - 1))}
-              className="px-2 py-0.5 hover:bg-[#37373d] active:bg-[#444] text-neutral-300 font-bold"
-              title="Reducir fuente"
-            >
-              A-
-            </button>
-            <span className="px-1.5 text-[10px] text-neutral-400 min-w-[24px] text-center">
-              {fontSize}px
+      {isExplorerOpen && (
+        <aside className="w-56 min-w-[220px] max-w-[240px] bg-[#252526] border-r border-[#333333] flex flex-col shrink-0 h-full overflow-hidden relative">
+          
+          {/* Cabecera del Explorador con Menú de 3 puntos y botón para colapsar */}
+          <div className="h-8 min-h-[32px] px-2.5 bg-[#2d2d2d] border-b border-[#333333] flex items-center justify-between relative">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-300">
+              Explorador
             </span>
-            <button
-              onClick={() => setFontSize((s) => Math.min(20, s + 1))}
-              className="px-2 py-0.5 hover:bg-[#37373d] active:bg-[#444] text-neutral-300 font-bold"
-              title="Aumentar fuente"
-            >
-              A+
-            </button>
+
+            <div className="flex items-center gap-1">
+              {/* Botón de 3 puntos con opciones A-, A+, Wrap */}
+              <button
+                onClick={() => setMenuOpen(!menuOpen)}
+                className={`p-1 rounded hover:bg-[#3e3e42] text-neutral-400 hover:text-white transition-colors ${
+                  menuOpen ? 'bg-[#3e3e42] text-white' : ''
+                }`}
+                title="Opciones de visualización"
+                aria-label="Opciones"
+              >
+                <MoreVertical className="w-3.5 h-3.5" />
+              </button>
+
+              {/* Botón para esconder/colapsar el explorador */}
+              <button
+                onClick={() => setIsExplorerOpen(false)}
+                className="p-1 rounded hover:bg-[#3e3e42] text-neutral-400 hover:text-white transition-colors"
+                title="Ocultar explorador"
+                aria-label="Ocultar explorador"
+              >
+                <PanelLeftClose className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* Menú flotante de los 3 puntos */}
+            {menuOpen && (
+              <>
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setMenuOpen(false)}
+                />
+                <div className="absolute right-1 top-8.5 z-50 bg-[#252526] border border-[#444] rounded shadow-2xl p-2.5 min-w-[170px] space-y-2 text-xs font-sans">
+                  
+                  {/* Control A- / A+ */}
+                  <div>
+                    <span className="text-[10px] uppercase text-neutral-400 font-semibold block mb-1">
+                      Tamaño de fuente
+                    </span>
+                    <div className="flex items-center justify-between bg-[#1e1e1e] border border-[#3e3e42] rounded px-1 py-0.5">
+                      <button
+                        onClick={() => setFontSize((s) => Math.max(9, s - 1))}
+                        className="px-2 py-0.5 hover:bg-white/10 rounded font-bold text-neutral-200"
+                      >
+                        A-
+                      </button>
+                      <span className="text-neutral-300 font-mono text-[11px]">
+                        {fontSize}px
+                      </span>
+                      <button
+                        onClick={() => setFontSize((s) => Math.min(20, s + 1))}
+                        className="px-2 py-0.5 hover:bg-white/10 rounded font-bold text-neutral-200"
+                      >
+                        A+
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Control Wrap */}
+                  <div className="pt-1.5 border-t border-[#3e3e42]">
+                    <button
+                      onClick={() => setWordWrap(!wordWrap)}
+                      className={`w-full py-1 px-2 rounded text-left flex items-center justify-between transition-colors ${
+                        wordWrap
+                          ? 'bg-[#094771] text-white'
+                          : 'hover:bg-white/5 text-neutral-300'
+                      }`}
+                    >
+                      <span>Ajuste (Wrap)</span>
+                      <span className="text-[10px] font-mono font-bold">
+                        {wordWrap ? 'ON' : 'OFF'}
+                      </span>
+                    </button>
+                  </div>
+
+                  {/* Volver al portafolio */}
+                  <div className="pt-1.5 border-t border-[#3e3e42]">
+                    <Link
+                      href="/"
+                      className="flex items-center gap-1.5 text-neutral-400 hover:text-white py-1 px-2 rounded hover:bg-white/5"
+                    >
+                      <ArrowLeft className="w-3.5 h-3.5" />
+                      <span>Volver al portafolio</span>
+                    </Link>
+                  </div>
+
+                </div>
+              </>
+            )}
           </div>
 
-          <button
-            onClick={() => setWordWrap(!wordWrap)}
-            className={`px-2 py-0.5 rounded border text-[11px] transition-colors ${
-              wordWrap
-                ? 'bg-[#094771] border-[#007acc] text-white'
-                : 'bg-[#252526] border-[#444] text-neutral-400 hover:text-neutral-200'
-            }`}
-            title="Alternar ajuste de línea"
-          >
-            Wrap
-          </button>
-        </div>
-      </header>
-
-      {/* ====================================================================
-          CUERPO PRINCIPAL (2 COLUMNAS EN CELULAR HORIZONTAL)
-          ==================================================================== */}
-      <main className="flex-1 flex relative overflow-hidden">
-        
-        {/* Fondo oscuro para móvil vertical */}
-        {sidebarOpen && (
-          <div
-            onClick={() => setSidebarOpen(false)}
-            className="sm:hidden fixed inset-0 top-8 bg-black/60 z-20 backdrop-blur-xs"
-          />
-        )}
-
-        {/* ==================================================================
-            COLUMNA IZQUIERDA: ÁRBOL DE CARPETAS
-            ================================================================== */}
-        <aside
-          className={`
-            w-52 min-w-[208px] max-w-[220px] bg-[#252526] border-r border-[#333333] flex flex-col shrink-0 z-20
-            sm:relative sm:translate-x-0
-            ${sidebarOpen ? 'absolute top-0 bottom-0 left-0 translate-x-0 shadow-2xl' : 'max-sm:-translate-x-full absolute top-0 bottom-0 left-0'}
-            transition-transform duration-150 ease-out
-          `}
-        >
-          <div className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-neutral-400 bg-[#2d2d2d] border-b border-[#333333]">
-            Explorador
-          </div>
-
+          {/* Árbol de Carpetas con scroll solo en la lista */}
           <div className="flex-1 overflow-y-auto py-1 text-xs font-mono">
             
             {/* Carpeta: src */}
@@ -327,34 +354,36 @@ export default function CodigoDeClaseNodePage() {
 
           </div>
         </aside>
+      )}
 
-        {/* ==================================================================
-            COLUMNA DERECHA: VISOR DE CÓDIGO
-            ================================================================== */}
-        <section className="flex-1 h-full overflow-auto bg-[#1e1e1e] relative">
+      {/* ====================================================================
+          COLUMNA DERECHA: VISOR DE CÓDIGO
+          ==================================================================== */}
+      <section className="flex-1 h-full overflow-hidden bg-[#1e1e1e] relative flex flex-col">
+        
+        {/* Botón flotante para reabrir el explorador cuando esté cerrado */}
+        {!isExplorerOpen && (
+          <button
+            onClick={() => setIsExplorerOpen(true)}
+            className="absolute top-2 left-2 z-30 flex items-center gap-1.5 px-2.5 py-1 rounded bg-[#252526]/90 hover:bg-[#333333] border border-[#444444] text-neutral-200 text-xs shadow-lg backdrop-blur-xs transition-colors"
+            title="Abrir explorador"
+          >
+            <PanelLeftOpen className="w-3.5 h-3.5 text-teal-400" />
+            <span className="font-sans font-medium text-[11px]">Explorador</span>
+          </button>
+        )}
+
+        {/* Contenedor del código con scroll interno propio */}
+        <div className="flex-1 h-full overflow-auto bg-[#1e1e1e] p-0 m-0">
           <CodeHighlighter
             code={activeFile.content}
             language={activeFile.language}
             fontSize={fontSize}
             wordWrap={wordWrap}
           />
-        </section>
-
-      </main>
-
-      {/* ====================================================================
-          BARRA DE ESTADO INFERIOR
-          ==================================================================== */}
-      <footer className="h-5 min-h-[20px] bg-[#007acc] text-white text-[10px] font-mono px-3 flex items-center justify-between z-30">
-        <div className="flex items-center gap-3">
-          <span>Node.js ESM</span>
-          <span className="hidden sm:inline">01-clase-CRUD-node</span>
         </div>
-        <div className="flex items-center gap-3">
-          <span>{activeFile.lines} líneas</span>
-          <span>UTF-8</span>
-        </div>
-      </footer>
+
+      </section>
 
     </div>
   );
