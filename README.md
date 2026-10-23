@@ -1,42 +1,39 @@
 # Portfolio & Lab Modular de Dylan
 
-Portafolio web editorial y laboratorio de ideas independientes integradas bajo un único dominio con arquitectura por subrutas (`/lab/[slug]`).
+> **Instrucciones para Asistentes de IA / Chats:**
+> Si eres una IA (ChatGPT, Claude, Cursor, Copilot, Antigravity, etc.) interactuando con este repositorio, **lee primero [AGENTS.md](AGENTS.md)**. Allí se encuentran las reglas obligatorias de diseño (cero emojis, uso de Lucide React), la arquitectura modular de subrutas (`/lab/[slug]`), la configuración de Supabase y el protocolo para crear nuevos proyectos.
 
-Construido con **Next.js 15 (App Router)**, **React 19**, **TypeScript** y **Tailwind CSS**.
+Portafolio web editorial y laboratorio de ideas interactivas independientes alojadas bajo un único dominio con arquitectura desacoplada por subrutas (`/lab/[slug]`).
+
+Construido con **Next.js 15 (App Router)**, **React 19**, **TypeScript**, **Tailwind CSS v4** y **Supabase**.
 
 ---
 
-## 🚀 Cómo agregar un nuevo proyecto / experimento
+## Proyectos en el Lab
+
+- **Apuesta & Quiniela de Puntajes** (`/lab/apuesta-puntaje`):
+  Salas de apuestas numéricas en tiempo real con Supabase Realtime, pronósticos secretos y resolución protegida por contraseña de creador.
+- **Template Base** (`/lab/template-lab`):
+  Plantilla inicial con navegación integrada de retorno para clonar al crear nuevas ideas.
+
+---
+
+## Cómo agregar un nuevo proyecto / experimento
 
 Para crear un nuevo proyecto sin interferir con el portafolio ni requerir un nuevo dominio:
 
-1. **Duplica la plantilla**:
-   Copia la carpeta:
-   `src/app/lab/template-lab/`
-   Y renómbrala con el slug de tu nuevo proyecto (ej. `src/app/lab/mi-proyecto/`).
-
+1. **Crea la subruta**:
+   Duplica la carpeta `src/app/lab/template-lab/` renombrándola con el slug de tu nuevo proyecto (ej. `src/app/lab/mi-proyecto/`).
 2. **Registra los metadatos**:
-   Abre [`src/content/projects.ts`](file:///c:/Users/contr/Documents/PortafolioWebDylan/src/content/projects.ts) y añade una entrada al arreglo `PROJECTS`:
-   ```ts
-   {
-     slug: 'mi-proyecto',
-     title: 'Mi Nuevo Proyecto',
-     category: 'web-app',
-     summary: 'Descripción breve de lo que hace el proyecto.',
-     description: 'Detalles ampliados...',
-     year: '2026',
-     status: 'live',
-     tags: ['React', 'Next.js', 'Tailwind'],
-     featured: true,
-   }
-   ```
-
-3. **Desarrolla libremente**:
-   Edita `src/app/lab/mi-proyecto/page.tsx`. Tu nuevo proyecto estará disponible instantáneamente en `http://localhost:3000/lab/mi-proyecto` y en producción.
+   Abre [`src/content/projects.ts`](src/content/projects.ts) y añade la entrada al arreglo `PROJECTS`.
+3. **Desarrolla**:
+   Edita `src/app/lab/mi-proyecto/page.tsx`. Tu proyecto estará disponible instantáneamente en `http://localhost:3000/lab/mi-proyecto`.
+4. **Regla de interfaz**:
+   No uses emojis. Utiliza siempre iconos vectoriales SVG de `lucide-react`.
 
 ---
 
-## 🛠️ Comandos locales
+## Comandos locales
 
 - **Iniciar servidor de desarrollo**:
   ```bash
@@ -47,4 +44,9 @@ Para crear un nuevo proyecto sin interferir con el portafolio ni requerir un nue
 - **Compilar para producción**:
   ```bash
   npm run build
+  ```
+
+- **Subir cambios a producción (Vercel)**:
+  ```bash
+  git add . ; git commit -m "feat: nuevo proyecto" ; git push origin main
   ```
