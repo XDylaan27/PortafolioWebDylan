@@ -1,11 +1,10 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Mic, MicOff, Wifi, WifiOff, Volume2, ShieldCheck, Radio, AlertCircle } from 'lucide-react';
+import { Mic, MicOff, ShieldCheck, Radio, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 export default function SubtitulosMobilePage() {
-  const [ipAddress, setIpAddress] = useState('');
-  const [port, setPort] = useState('3000');
+  const [targetServer, setTargetServer] = useState('');
   const [isConnected, setIsConnected] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [volumeLevel, setVolumeLevel] = useState(0);
@@ -18,22 +17,22 @@ export default function SubtitulosMobilePage() {
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
 
-  // Leer IP guardada en localStorage o parámetro URL (?ip=192.168.1.8)
+  // Leer parámetro tunnel o ip desde la URL o localStorage
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    const queryTunnel = params.get('tunnel');
     const queryIp = params.get('ip');
-    const queryPort = params.get('port');
 
-    if (queryIp) {
-      setIpAddress(queryIp);
-      localStorage.setItem('subtitulos_laptop_ip', queryIp);
+    if (queryTunnel) {
+      setTargetServer(queryTunnel);
+      localStorage.setItem('subtitulos_server_target', queryTunnel);
+    } else if (queryIp) {
+      setTargetServer(queryIp);
+      localStorage.setItem('subtitulos_server_target', queryIp);
     } else {
-      const savedIp = localStorage.getItem('subtitulos_laptop_ip');
-      if (savedIp) setIpAddress(savedIp);
-    }
-
-    if (queryPort) {
-      setPort(queryPort);
+      const saved = localStorage.getItem('subtitulos_server_target');
+      if (saved) setTargetServer(saved);
+      else setTargetServer('192.168.1.8');
     }
   }, []);
 
@@ -49,16 +48,34 @@ export default function SubtitulosMobilePage() {
   };
 
   const connectWebSocket = () => {
-    if (!ipAddress) {
-      setErrorMsg('Por favor ingresa la IP local de tu portátil.');
+    if (!targetServer) {
+      setErrorMsg('Por favor ingresa la dirección o túnel del portátil.');
       return;
     }
 
     setErrorMsg(null);
-    localStorage.setItem('subtitulos_laptop_ip', ipAddress);
+    localStorage.setItem('subtitulos_server_target', targetServer);
 
     try {
-      const wsUrl = `ws://${ipAddress.trim()}:${port.trim()}`;
+      let wsUrl = targetServer.trim();
+
+      // Si es una URL https:// de túnel (ej: https://xxx.loca.lt)
+      if (wsUrl.startsWith('https://')) {
+        wsUrl = wsUrl.replace('https://', 'wss://');
+      } else if (wsUrl.startsWith('http://')) {
+        wsUrl = wsUrl.replace('http://', 'ws://');
+      } else if (!wsUrl.startsWith('ws://') && !wsUrl.startsWith('wss://')) {
+        // Es una IP o dominio sin protocolo
+        if (wsUrl.includes('loca.lt') || wsUrl.includes('trycloudflare')) {
+          wsUrl = `wss://${wsUrl}`;
+        } else {
+          // IP local
+          const port = wsUrl.includes(':') ? '' : ':3000';
+          wsUrl = `ws://${wsUrl}${port}`;
+        }
+      }
+
+      console.log('Conectando WebSocket a:', wsUrl);
       const ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
@@ -72,7 +89,7 @@ export default function SubtitulosMobilePage() {
       };
 
       ws.onerror = () => {
-        setErrorMsg(`No se pudo conectar a ${wsUrl}. Verifica que estés en la misma red Wi-Fi y que el servidor de subtítulos esté activo en el portátil.`);
+        setErrorMsg(`No se pudo conectar a ${wsUrl}. Verifica que la app de subtítulos esté abierta en el portátil.`);
       };
 
       ws.onmessage = (event) => {
@@ -81,11 +98,11 @@ export default function SubtitulosMobilePage() {
           if (data.type === 'partial') {
             setLastPartial(data.text);
           } else if (data.type === 'confirmed') {
-            setConfirmedList((prev) => [...prev.slice(-4), data.text]);
+            setConfirmedList((prev) => [...prev.slice(-3), data.text]);
             setLastPartial('');
           }
         } catch {
-          // Ignorar mensajes no JSON
+          // Ignorar
         }
       };
 
@@ -124,14 +141,12 @@ export default function SubtitulosMobilePage() {
       audioContextRef.current = audioCtx;
 
       const source = audioCtx.createMediaStreamSource(stream);
-      // Fragmentos de 2048 muestras a 16kHz = ~128 ms de latencia
       const processor = audioCtx.createScriptProcessor(2048, 1, 1);
       processorRef.current = processor;
 
       processor.onaudioprocess = (e) => {
         const inputData = e.inputBuffer.getChannelData(0);
 
-        // Medidor de volumen
         let sum = 0;
         for (let i = 0; i < inputData.length; i++) {
           sum += inputData[i] * inputData[i];
@@ -139,7 +154,6 @@ export default function SubtitulosMobilePage() {
         const rms = Math.sqrt(sum / inputData.length);
         setVolumeLevel(Math.min(100, Math.round(rms * 450)));
 
-        // Enviar audio en PCM al portátil por WebSocket
         if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
           const pcmData = floatToInt16PCM(inputData);
           wsRef.current.send(pcmData);
@@ -182,18 +196,18 @@ export default function SubtitulosMobilePage() {
         <div className="space-y-1">
           <div className="flex items-center gap-2 text-sky-400 font-mono text-xs uppercase tracking-wider">
             <Radio className="w-4 h-4 animate-pulse" />
-            <span>Streaming de Audio Local</span>
+            <span>Transmisor de Voz Móvil</span>
           </div>
-          <h1 className="text-xl font-bold text-white tracking-tight">Micrófono Remoto para Subtítulos</h1>
+          <h1 className="text-xl font-bold text-white tracking-tight">Micrófono para Subtítulos</h1>
           <p className="text-xs text-neutral-400 leading-relaxed">
-            Transmite tu voz desde Android hacia el motor local sherpa-onnx en el portátil.
+            Envía tu voz en tiempo real para mostrar los subtítulos sobre tu portátil.
           </p>
         </div>
 
         {/* Estado y Conexión */}
         <div className="bg-neutral-950/80 p-4 rounded-xl border border-neutral-800 space-y-3">
           <div className="flex items-center justify-between text-xs">
-            <span className="text-neutral-400 font-mono">Enlace WebSocket:</span>
+            <span className="text-neutral-400 font-mono">Estado de enlace:</span>
             <span
               className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-mono font-medium text-[11px] ${
                 isConnected
@@ -201,25 +215,25 @@ export default function SubtitulosMobilePage() {
                   : 'bg-red-950/70 text-red-400 border border-red-800/80'
               }`}
             >
-              {isConnected ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
+              {isConnected ? <CheckCircle2 className="w-3 h-3 text-emerald-400" /> : <AlertCircle className="w-3 h-3 text-red-400" />}
               {isConnected ? 'Conectado al portátil' : 'Desconectado'}
             </span>
           </div>
 
           {!isConnected ? (
             <div className="space-y-2 pt-1">
-              <label className="text-xs text-neutral-400 font-mono">IP local del portátil:</label>
+              <label className="text-xs text-neutral-400 font-mono">Túnel Seguro WSS o IP del Portátil:</label>
               <div className="flex gap-2">
                 <input
                   type="text"
-                  value={ipAddress}
-                  onChange={(e) => setIpAddress(e.target.value)}
-                  placeholder="Ej: 192.168.1.8"
-                  className="flex-1 bg-neutral-900 border border-neutral-700 px-3 py-2 rounded-lg text-sm text-white font-mono focus:outline-none focus:border-sky-500 transition"
+                  value={targetServer}
+                  onChange={(e) => setTargetServer(e.target.value)}
+                  placeholder="https://xxx.loca.lt o 192.168.1.8"
+                  className="flex-1 bg-neutral-900 border border-neutral-700 px-3 py-2 rounded-lg text-xs text-white font-mono focus:outline-none focus:border-sky-500 transition"
                 />
                 <button
                   onClick={connectWebSocket}
-                  className="bg-sky-600 hover:bg-sky-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition cursor-pointer"
+                  className="bg-sky-600 hover:bg-sky-500 text-white px-4 py-2 rounded-lg text-xs font-semibold transition cursor-pointer"
                 >
                   Conectar
                 </button>
@@ -227,8 +241,8 @@ export default function SubtitulosMobilePage() {
             </div>
           ) : (
             <div className="flex items-center justify-between pt-1">
-              <span className="text-xs text-neutral-400 font-mono">
-                Destino: {ipAddress}:{port}
+              <span className="text-xs text-neutral-400 font-mono truncate max-w-[200px]">
+                {targetServer}
               </span>
               <button
                 onClick={disconnectWebSocket}
@@ -248,7 +262,7 @@ export default function SubtitulosMobilePage() {
           </div>
         )}
 
-        {/* Controles de Micrófono */}
+        {/* Botón de Grabación */}
         <div className="flex flex-col items-center gap-3">
           {!isRecording ? (
             <button
@@ -273,14 +287,11 @@ export default function SubtitulosMobilePage() {
             </button>
           )}
 
-          {/* Vúmetro de volumen */}
+          {/* Vúmetro */}
           <div className="w-full space-y-1.5 pt-1">
             <div className="flex items-center justify-between text-[11px] text-neutral-400 font-mono">
-              <span className="flex items-center gap-1">
-                <Volume2 className="w-3.5 h-3.5" />
-                <span>Nivel de audio</span>
-              </span>
-              <span>{isRecording ? 'Capturando' : 'En espera'}</span>
+              <span>Nivel de audio</span>
+              <span>{isRecording ? 'Transmitiendo' : 'En espera'}</span>
             </div>
             <div className="w-full bg-neutral-950 h-2 rounded-full overflow-hidden border border-neutral-800">
               <div
@@ -291,32 +302,28 @@ export default function SubtitulosMobilePage() {
           </div>
         </div>
 
-        {/* Monitor de subtítulos en vivo */}
-        <div className="bg-neutral-950 border border-neutral-800 rounded-xl p-4 min-h-[110px] flex flex-col justify-between space-y-2">
+        {/* Monitor local en el celular */}
+        <div className="bg-neutral-950 border border-neutral-800 rounded-xl p-4 min-h-[90px] flex flex-col justify-between space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-mono uppercase tracking-wider text-neutral-500 font-medium">
-              Monitor de transcripción (Eco local)
+              Monitor de transcripción
             </span>
             <span className="flex items-center gap-1 text-[10px] text-neutral-500 font-mono">
               <ShieldCheck className="w-3 h-3 text-sky-400" />
-              <span>Sin guardar audio</span>
+              <span>Flotando en PC</span>
             </span>
           </div>
 
           <div className="text-sm leading-relaxed">
             {confirmedList.map((chunk, idx) => (
-              <span key={idx} className="text-neutral-300 mr-1.5">
-                {chunk}
-              </span>
+              <span key={idx} className="text-neutral-300 mr-1.5">{chunk}</span>
             ))}
             {lastPartial && (
-              <span className="text-sky-400 font-medium italic">
-                {lastPartial}
-              </span>
+              <span className="text-sky-400 font-medium italic">{lastPartial}</span>
             )}
             {!confirmedList.length && !lastPartial && (
               <span className="text-neutral-600 italic text-xs">
-                Inicia la captura y habla al micrófono del móvil...
+                Inicia la captura y habla al micrófono...
               </span>
             )}
           </div>
