@@ -1,5 +1,7 @@
 # Portfolio & Lab Modular de Dylan
 
+**Sitio Web en Vivo:** [https://portafoliowebdylan.vercel.app/](https://portafoliowebdylan.vercel.app/)
+
 > **Instrucciones para Asistentes de IA / Chats:**
 > Si eres una IA (ChatGPT, Claude, Cursor, Copilot, Antigravity, etc.) interactuando con este repositorio, **lee primero [AGENTS.md](AGENTS.md)**. Allí se encuentran las reglas obligatorias de diseño (cero emojis, uso de Lucide React), la arquitectura modular de subrutas (`/lab/[slug]`), la configuración de Supabase y el protocolo para crear nuevos proyectos.
 

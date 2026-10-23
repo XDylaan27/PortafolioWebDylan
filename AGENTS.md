@@ -8,6 +8,7 @@ Este documento contiene toda la información técnica, reglas de diseño, estruc
 
 - **Propietario / Desarrollador:** Dylan
 - **Nombre del Proyecto:** `PortafolioWebDylan`
+- **URL de Producción / Sitio Web en Vivo:** `https://portafoliowebdylan.vercel.app/`
 - **Repositorio Remoto (GitHub):** `https://github.com/XDylaan27/PortafolioWebDylan.git`
 - **Rama Principal:** `main`
 - **Plataforma de Despliegue:** [Vercel](https://vercel.com) (despliegue continuo automático en cada `git push origin main`)

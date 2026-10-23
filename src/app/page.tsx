@@ -201,7 +201,7 @@ export default function HomePage() {
         </div>
         <div className="flex items-center gap-6">
           <a
-            href="https://github.com"
+            href="https://github.com/XDylaan27/PortafolioWebDylan"
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-1.5 hover:text-neutral-900 dark:hover:text-white transition-colors"
@@ -212,12 +212,12 @@ export default function HomePage() {
             GitHub
           </a>
           <a
-            href="https://vercel.com"
+            href="https://portafoliowebdylan.vercel.app/"
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-1 hover:text-neutral-900 dark:hover:text-white transition-colors"
           >
-            Vercel
+            Web
           </a>
         </div>
       </footer>
