@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import { Mic, MicOff, Wifi, WifiOff, Volume2, ShieldCheck, Radio, AlertCircle } from 'lucide-react';
 
 export default function SubtitulosMobilePage() {
   const [ipAddress, setIpAddress] = useState('');
@@ -57,7 +58,6 @@ export default function SubtitulosMobilePage() {
     localStorage.setItem('subtitulos_laptop_ip', ipAddress);
 
     try {
-      // ws://<ip_portatil>:<puerto>
       const wsUrl = `ws://${ipAddress.trim()}:${port.trim()}`;
       const ws = new WebSocket(wsUrl);
 
@@ -72,7 +72,7 @@ export default function SubtitulosMobilePage() {
       };
 
       ws.onerror = () => {
-        setErrorMsg(`No se pudo conectar a ${wsUrl}. Verifica que estés en la misma red Wi-Fi y que el servidor esté activo.`);
+        setErrorMsg(`No se pudo conectar a ${wsUrl}. Verifica que estés en la misma red Wi-Fi y que el servidor de subtítulos esté activo en el portátil.`);
       };
 
       ws.onmessage = (event) => {
@@ -84,7 +84,7 @@ export default function SubtitulosMobilePage() {
             setConfirmedList((prev) => [...prev.slice(-4), data.text]);
             setLastPartial('');
           }
-        } catch (e) {
+        } catch {
           // Ignorar mensajes no JSON
         }
       };
@@ -139,7 +139,7 @@ export default function SubtitulosMobilePage() {
         const rms = Math.sqrt(sum / inputData.length);
         setVolumeLevel(Math.min(100, Math.round(rms * 450)));
 
-        // Enviar audio en PCM al portátil
+        // Enviar audio en PCM al portátil por WebSocket
         if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
           const pcmData = floatToInt16PCM(inputData);
           wsRef.current.send(pcmData);
@@ -175,54 +175,66 @@ export default function SubtitulosMobilePage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 p-4 flex flex-col items-center justify-start">
-      <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-6">
+    <div className="min-h-[calc(100vh-50px)] bg-neutral-950 text-neutral-100 p-4 sm:p-6 flex flex-col items-center justify-start">
+      <div className="w-full max-w-md bg-neutral-900 border border-neutral-800 rounded-2xl p-6 shadow-2xl space-y-6">
+        
         {/* Cabecera */}
-        <div className="text-center space-y-1">
-          <h1 className="text-xl font-bold text-sky-400">Micrófono Móvil para Subtítulos</h1>
-          <p className="text-xs text-slate-400">Captura de voz desde Android hacia el portátil</p>
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 text-sky-400 font-mono text-xs uppercase tracking-wider">
+            <Radio className="w-4 h-4 animate-pulse" />
+            <span>Streaming de Audio Local</span>
+          </div>
+          <h1 className="text-xl font-bold text-white tracking-tight">Micrófono Remoto para Subtítulos</h1>
+          <p className="text-xs text-neutral-400 leading-relaxed">
+            Transmite tu voz desde Android hacia el motor local sherpa-onnx en el portátil.
+          </p>
         </div>
 
-        {/* Estado y Configuración IP */}
-        <div className="bg-slate-950 p-4 rounded-xl border border-slate-800/80 space-y-3">
+        {/* Estado y Conexión */}
+        <div className="bg-neutral-950/80 p-4 rounded-xl border border-neutral-800 space-y-3">
           <div className="flex items-center justify-between text-xs">
-            <span className="text-slate-400">Estado:</span>
+            <span className="text-neutral-400 font-mono">Enlace WebSocket:</span>
             <span
-              className={`px-2.5 py-1 rounded-full font-semibold ${
-                isConnected ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-red-950 text-red-400 border border-red-800'
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-mono font-medium text-[11px] ${
+                isConnected
+                  ? 'bg-emerald-950/70 text-emerald-400 border border-emerald-800/80'
+                  : 'bg-red-950/70 text-red-400 border border-red-800/80'
               }`}
             >
-              {isConnected ? '● Enlazado al portátil' : '○ Desconectado'}
+              {isConnected ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
+              {isConnected ? 'Conectado al portátil' : 'Desconectado'}
             </span>
           </div>
 
           {!isConnected ? (
-            <div className="space-y-2">
-              <label className="text-xs text-slate-400">IP local del portátil:</label>
+            <div className="space-y-2 pt-1">
+              <label className="text-xs text-neutral-400 font-mono">IP local del portátil:</label>
               <div className="flex gap-2">
                 <input
                   type="text"
                   value={ipAddress}
                   onChange={(e) => setIpAddress(e.target.value)}
                   placeholder="Ej: 192.168.1.8"
-                  className="flex-1 bg-slate-900 border border-slate-700 px-3 py-2 rounded-lg text-sm text-white focus:outline-none focus:border-sky-500"
+                  className="flex-1 bg-neutral-900 border border-neutral-700 px-3 py-2 rounded-lg text-sm text-white font-mono focus:outline-none focus:border-sky-500 transition"
                 />
                 <button
                   onClick={connectWebSocket}
-                  className="bg-sky-600 hover:bg-sky-500 text-white px-4 py-2 rounded-lg text-sm font-semibold transition"
+                  className="bg-sky-600 hover:bg-sky-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition cursor-pointer"
                 >
                   Conectar
                 </button>
               </div>
             </div>
           ) : (
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-slate-400">IP: {ipAddress}:{port}</span>
+            <div className="flex items-center justify-between pt-1">
+              <span className="text-xs text-neutral-400 font-mono">
+                Destino: {ipAddress}:{port}
+              </span>
               <button
                 onClick={disconnectWebSocket}
-                className="text-xs text-red-400 hover:text-red-300 underline"
+                className="text-xs text-neutral-400 hover:text-red-400 underline font-mono transition cursor-pointer"
               >
-                Cambiar IP / Desconectar
+                Desconectar
               </button>
             </div>
           )}
@@ -230,63 +242,86 @@ export default function SubtitulosMobilePage() {
 
         {/* Errores */}
         {errorMsg && (
-          <div className="bg-red-900/30 border border-red-700/50 text-red-300 text-xs p-3 rounded-lg">
-            {errorMsg}
+          <div className="bg-red-950/40 border border-red-800/60 text-red-300 text-xs p-3 rounded-lg flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-400" />
+            <span>{errorMsg}</span>
           </div>
         )}
 
-        {/* Botón principal de Micrófono */}
+        {/* Controles de Micrófono */}
         <div className="flex flex-col items-center gap-3">
           {!isRecording ? (
             <button
               onClick={startRecording}
               disabled={!isConnected}
-              className={`w-full py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 shadow-lg transition ${
+              className={`w-full py-4 rounded-xl font-semibold text-base flex items-center justify-center gap-2.5 shadow-lg transition cursor-pointer ${
                 isConnected
-                  ? 'bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white'
-                  : 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                  ? 'bg-emerald-600 hover:bg-emerald-500 text-white active:scale-[0.98]'
+                  : 'bg-neutral-800 text-neutral-500 cursor-not-allowed'
               }`}
             >
-              <span>🎤</span> Hablar ahora
+              <Mic className="w-5 h-5" />
+              <span>Iniciar captura de voz</span>
             </button>
           ) : (
             <button
               onClick={stopRecording}
-              className="w-full py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 bg-red-600 hover:bg-red-500 active:scale-95 text-white shadow-lg shadow-red-900/40 transition"
+              className="w-full py-4 rounded-xl font-semibold text-base flex items-center justify-center gap-2.5 bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-950/50 active:scale-[0.98] transition cursor-pointer"
             >
-              <span>⏹</span> Detener captura
+              <MicOff className="w-5 h-5 animate-pulse" />
+              <span>Detener captura</span>
             </button>
           )}
 
-          {/* Vúmetro de audio */}
-          <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-            <div
-              className="bg-emerald-500 h-full transition-all duration-75"
-              style={{ width: `${volumeLevel}%` }}
-            />
+          {/* Vúmetro de volumen */}
+          <div className="w-full space-y-1.5 pt-1">
+            <div className="flex items-center justify-between text-[11px] text-neutral-400 font-mono">
+              <span className="flex items-center gap-1">
+                <Volume2 className="w-3.5 h-3.5" />
+                <span>Nivel de audio</span>
+              </span>
+              <span>{isRecording ? 'Capturando' : 'En espera'}</span>
+            </div>
+            <div className="w-full bg-neutral-950 h-2 rounded-full overflow-hidden border border-neutral-800">
+              <div
+                className="bg-emerald-500 h-full transition-all duration-75"
+                style={{ width: `${volumeLevel}%` }}
+              />
+            </div>
           </div>
-          <span className="text-[11px] text-slate-500">
-            {isRecording ? 'Transmitiendo voz al portátil en tiempo real...' : 'Micrófono en pausa'}
-          </span>
         </div>
 
-        {/* Retroalimentación de lo que se está transcribiendo */}
-        <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 min-h-[100px] flex flex-col justify-end space-y-1">
-          <span className="text-[11px] uppercase tracking-wider text-slate-500 font-bold">
-            Lo que el portátil está transcribiendo:
-          </span>
+        {/* Monitor de subtítulos en vivo */}
+        <div className="bg-neutral-950 border border-neutral-800 rounded-xl p-4 min-h-[110px] flex flex-col justify-between space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-mono uppercase tracking-wider text-neutral-500 font-medium">
+              Monitor de transcripción (Eco local)
+            </span>
+            <span className="flex items-center gap-1 text-[10px] text-neutral-500 font-mono">
+              <ShieldCheck className="w-3 h-3 text-sky-400" />
+              <span>Sin guardar audio</span>
+            </span>
+          </div>
+
           <div className="text-sm leading-relaxed">
-            {confirmedList.map((c, i) => (
-              <span key={i} className="text-slate-300 mr-1.5">{c}</span>
+            {confirmedList.map((chunk, idx) => (
+              <span key={idx} className="text-neutral-300 mr-1.5">
+                {chunk}
+              </span>
             ))}
             {lastPartial && (
-              <span className="text-sky-400 italic font-medium">{lastPartial}</span>
+              <span className="text-sky-400 font-medium italic">
+                {lastPartial}
+              </span>
             )}
             {!confirmedList.length && !lastPartial && (
-              <span className="text-slate-600 italic">Pulsa &quot;Hablar ahora&quot; y di algo...</span>
+              <span className="text-neutral-600 italic text-xs">
+                Inicia la captura y habla al micrófono del móvil...
+              </span>
             )}
           </div>
         </div>
+
       </div>
     </div>
   );

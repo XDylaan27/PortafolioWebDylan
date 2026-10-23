@@ -16,6 +16,17 @@ export interface Project {
 
 export const PROJECTS: Project[] = [
   {
+    slug: 'subtitulos',
+    title: 'Subtítulos en Tiempo Real — Móvil a PC',
+    category: 'ai',
+    summary: 'Captura de voz remota desde Android y transcripción en streaming mediante sherpa-onnx local.',
+    description: 'Herramienta de accesibilidad que convierte el micrófono del celular en un emisor de audio de baja latencia vía WebSocket. Procesa el audio localmente en la laptop mediante modelos Zipformer en español sin enviar datos a servidores externos.',
+    year: '2026',
+    status: 'live',
+    tags: ['sherpa-onnx', 'WebSockets', 'Web Audio API', 'TypeScript', 'AI Streaming'],
+    featured: true,
+  },
+  {
     slug: 'codigo-node',
     title: 'Visor de Código Node — CRUD MySQL',
     category: 'tool',
