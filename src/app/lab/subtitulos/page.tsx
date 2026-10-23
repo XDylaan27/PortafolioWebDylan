@@ -1,10 +1,23 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Mic, MicOff, ShieldCheck, Radio, AlertCircle, CheckCircle2 } from 'lucide-react';
+import {
+  Mic,
+  MicOff,
+  Radio,
+  AlertCircle,
+  Sliders,
+  Maximize2,
+  Minimize2,
+  CheckCircle2,
+  ArrowUp,
+  ArrowDown,
+  AlignCenter
+} from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 
 export default function SubtitulosMobilePage() {
-  const [targetServer, setTargetServer] = useState('');
+  const [roomCode, setRoomCode] = useState('DYLAN');
   const [isConnected, setIsConnected] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [volumeLevel, setVolumeLevel] = useState(0);
@@ -12,113 +25,116 @@ export default function SubtitulosMobilePage() {
   const [confirmedList, setConfirmedList] = useState<string[]>([]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const wsRef = useRef<WebSocket | null>(null);
+  // Configuraciones de los subtítulos en el portátil
+  const [fontSize, setFontSize] = useState(24);
+  const [bgOpacity, setBgOpacity] = useState(0.7);
+  const [bgColor, setBgColor] = useState('#0f172a');
+  const [textColor, setTextColor] = useState('#ffffff');
+  const [position, setPosition] = useState<'bottom' | 'middle' | 'top'>('bottom');
+  const [maxWords, setMaxWords] = useState(15);
+  const [showSettings, setShowSettings] = useState(false);
+
+  const channelRef = useRef<any>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
 
-  // Leer parámetro tunnel o ip desde la URL o localStorage
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const queryTunnel = params.get('tunnel');
-    const queryIp = params.get('ip');
+    const savedRoom = localStorage.getItem('subtitulos_room_code');
+    if (savedRoom) setRoomCode(savedRoom);
 
-    if (queryTunnel) {
-      setTargetServer(queryTunnel);
-      localStorage.setItem('subtitulos_server_target', queryTunnel);
-    } else if (queryIp) {
-      setTargetServer(queryIp);
-      localStorage.setItem('subtitulos_server_target', queryIp);
-    } else {
-      const saved = localStorage.getItem('subtitulos_server_target');
-      if (saved) setTargetServer(saved);
-      else setTargetServer('192.168.1.8');
-    }
+    // Auto-conectar por defecto a la sala segura
+    connectToRoom(savedRoom || 'DYLAN');
+
+    return () => {
+      disconnect();
+    };
   }, []);
 
-  // Conversión Float32 a Int16 PCM (16 kHz Little Endian)
-  const floatToInt16PCM = (float32Array: Float32Array): ArrayBuffer => {
-    const buffer = new ArrayBuffer(float32Array.length * 2);
-    const view = new DataView(buffer);
-    for (let i = 0; i < float32Array.length; i++) {
-      let s = Math.max(-1, Math.min(1, float32Array[i]));
-      view.setInt16(i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true);
-    }
-    return buffer;
-  };
+  const connectToRoom = (code: string) => {
+    if (!code) return;
+    const cleanCode = code.trim().toUpperCase();
+    setRoomCode(cleanCode);
+    localStorage.setItem('subtitulos_room_code', cleanCode);
 
-  const connectWebSocket = () => {
-    if (!targetServer) {
-      setErrorMsg('Por favor ingresa la dirección o túnel del portátil.');
-      return;
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current);
     }
 
-    setErrorMsg(null);
-    localStorage.setItem('subtitulos_server_target', targetServer);
+    const channelName = `subtitulos_room_${cleanCode.toLowerCase()}`;
+    const channel = supabase.channel(channelName, {
+      config: { broadcast: { ack: false, self: false } },
+    });
 
-    try {
-      let wsUrl = targetServer.trim();
-
-      // Si es una URL https:// de túnel (ej: https://xxx.loca.lt)
-      if (wsUrl.startsWith('https://')) {
-        wsUrl = wsUrl.replace('https://', 'wss://');
-      } else if (wsUrl.startsWith('http://')) {
-        wsUrl = wsUrl.replace('http://', 'ws://');
-      } else if (!wsUrl.startsWith('ws://') && !wsUrl.startsWith('wss://')) {
-        // Es una IP o dominio sin protocolo
-        if (wsUrl.includes('loca.lt') || wsUrl.includes('trycloudflare')) {
-          wsUrl = `wss://${wsUrl}`;
-        } else {
-          // IP local
-          const port = wsUrl.includes(':') ? '' : ':3000';
-          wsUrl = `ws://${wsUrl}${port}`;
+    channel
+      .on('broadcast', { event: 'subtitle_feedback' }, ({ payload }) => {
+        if (payload.type === 'partial') {
+          setLastPartial(payload.text);
+        } else if (payload.type === 'confirmed') {
+          setConfirmedList((prev) => [...prev.slice(-3), payload.text]);
+          setLastPartial('');
         }
-      }
-
-      console.log('Conectando WebSocket a:', wsUrl);
-      const ws = new WebSocket(wsUrl);
-
-      ws.onopen = () => {
+      })
+      .on('broadcast', { event: 'pc_pong' }, () => {
         setIsConnected(true);
-        setErrorMsg(null);
-      };
-
-      ws.onclose = () => {
-        setIsConnected(false);
-        stopRecording();
-      };
-
-      ws.onerror = () => {
-        setErrorMsg(`No se pudo conectar a ${wsUrl}. Verifica que la app de subtítulos esté abierta en el portátil.`);
-      };
-
-      ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (data.type === 'partial') {
-            setLastPartial(data.text);
-          } else if (data.type === 'confirmed') {
-            setConfirmedList((prev) => [...prev.slice(-3), data.text]);
-            setLastPartial('');
-          }
-        } catch {
-          // Ignorar
+      })
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          setIsConnected(true);
+          setErrorMsg(null);
+          // Notificar presencia al PC
+          channel.send({ type: 'broadcast', event: 'mobile_ping', payload: {} });
+        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+          setIsConnected(false);
         }
-      };
+      });
 
-      wsRef.current = ws;
-    } catch (err: any) {
-      setErrorMsg('Error de conexión: ' + err.message);
-    }
+    channelRef.current = channel;
   };
 
-  const disconnectWebSocket = () => {
+  const disconnect = () => {
     stopRecording();
-    if (wsRef.current) {
-      wsRef.current.close();
-      wsRef.current = null;
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
     }
     setIsConnected(false);
+  };
+
+  // Enviar cambios de personalización al portátil
+  const broadcastSettings = (overrides: Partial<any> = {}) => {
+    if (!channelRef.current) return;
+    const current = {
+      fontSize,
+      bgOpacity,
+      bgColor,
+      textColor,
+      position,
+      maxWords,
+      ...overrides,
+    };
+    channelRef.current.send({
+      type: 'broadcast',
+      event: 'settings_update',
+      payload: { settings: current },
+    });
+  };
+
+  // Conversión Float32 a Int16 Base64 para transmisión rápida y segura
+  const float32ToBase64Int16 = (float32Array: Float32Array): string => {
+    const len = float32Array.length;
+    const int16Array = new Int16Array(len);
+    for (let i = 0; i < len; i++) {
+      let s = Math.max(-1, Math.min(1, float32Array[i]));
+      int16Array[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+    }
+    const uint8Array = new Uint8Array(int16Array.buffer);
+    let binary = '';
+    const byteLen = uint8Array.byteLength;
+    for (let i = 0; i < byteLen; i++) {
+      binary += String.fromCharCode(uint8Array[i]);
+    }
+    return window.btoa(binary);
   };
 
   const startRecording = async () => {
@@ -141,12 +157,14 @@ export default function SubtitulosMobilePage() {
       audioContextRef.current = audioCtx;
 
       const source = audioCtx.createMediaStreamSource(stream);
+      // Chunks de ~128 ms para mínima latencia
       const processor = audioCtx.createScriptProcessor(2048, 1, 1);
       processorRef.current = processor;
 
       processor.onaudioprocess = (e) => {
         const inputData = e.inputBuffer.getChannelData(0);
 
+        // Medidor de volumen
         let sum = 0;
         for (let i = 0; i < inputData.length; i++) {
           sum += inputData[i] * inputData[i];
@@ -154,9 +172,14 @@ export default function SubtitulosMobilePage() {
         const rms = Math.sqrt(sum / inputData.length);
         setVolumeLevel(Math.min(100, Math.round(rms * 450)));
 
-        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-          const pcmData = floatToInt16PCM(inputData);
-          wsRef.current.send(pcmData);
+        // Transmitir fragmento de audio al PC
+        if (channelRef.current) {
+          const base64Audio = float32ToBase64Int16(inputData);
+          channelRef.current.send({
+            type: 'broadcast',
+            event: 'audio_chunk',
+            payload: { base64: base64Audio },
+          });
         }
       };
 
@@ -164,7 +187,7 @@ export default function SubtitulosMobilePage() {
       processor.connect(audioCtx.destination);
       setIsRecording(true);
     } catch (err: any) {
-      setErrorMsg('Error accediendo al micrófono: ' + err.message);
+      setErrorMsg('Error de micrófono: ' + err.message);
     }
   };
 
@@ -181,8 +204,12 @@ export default function SubtitulosMobilePage() {
       mediaStreamRef.current.getTracks().forEach((track) => track.stop());
       mediaStreamRef.current = null;
     }
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: 'stop' }));
+    if (channelRef.current) {
+      channelRef.current.send({
+        type: 'broadcast',
+        event: 'audio_stop',
+        payload: {},
+      });
     }
     setIsRecording(false);
     setVolumeLevel(0);
@@ -194,65 +221,198 @@ export default function SubtitulosMobilePage() {
         
         {/* Cabecera */}
         <div className="space-y-1">
-          <div className="flex items-center gap-2 text-sky-400 font-mono text-xs uppercase tracking-wider">
-            <Radio className="w-4 h-4 animate-pulse" />
-            <span>Transmisor de Voz Móvil</span>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sky-400 font-mono text-xs uppercase tracking-wider">
+              <Radio className="w-4 h-4 animate-pulse" />
+              <span>Conexión Cifrada SSL</span>
+            </div>
+            <button
+              onClick={() => setShowSettings(!showSettings)}
+              className="text-xs flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 font-mono transition cursor-pointer"
+            >
+              <Sliders className="w-3.5 h-3.5" />
+              <span>Estilo</span>
+            </button>
           </div>
-          <h1 className="text-xl font-bold text-white tracking-tight">Micrófono para Subtítulos</h1>
-          <p className="text-xs text-neutral-400 leading-relaxed">
-            Envía tu voz en tiempo real para mostrar los subtítulos sobre tu portátil.
-          </p>
+          <h1 className="text-xl font-bold text-white tracking-tight">Control Remoto de Subtítulos</h1>
+          <p className="text-xs text-neutral-400">Habla y personaliza el aspecto en la pantalla de tu portátil.</p>
         </div>
 
-        {/* Estado y Conexión */}
+        {/* Estado y Código de Emparejamiento */}
         <div className="bg-neutral-950/80 p-4 rounded-xl border border-neutral-800 space-y-3">
           <div className="flex items-center justify-between text-xs">
-            <span className="text-neutral-400 font-mono">Estado de enlace:</span>
+            <span className="text-neutral-400 font-mono">Canal Seguro:</span>
             <span
               className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-mono font-medium text-[11px] ${
                 isConnected
                   ? 'bg-emerald-950/70 text-emerald-400 border border-emerald-800/80'
-                  : 'bg-red-950/70 text-red-400 border border-red-800/80'
+                  : 'bg-amber-950/70 text-amber-400 border border-amber-800/80'
               }`}
             >
-              {isConnected ? <CheckCircle2 className="w-3 h-3 text-emerald-400" /> : <AlertCircle className="w-3 h-3 text-red-400" />}
-              {isConnected ? 'Conectado al portátil' : 'Desconectado'}
+              {isConnected ? <CheckCircle2 className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
+              {isConnected ? 'Enlace Directo Activo' : 'Conectando...'}
             </span>
           </div>
 
-          {!isConnected ? (
-            <div className="space-y-2 pt-1">
-              <label className="text-xs text-neutral-400 font-mono">Túnel Seguro WSS o IP del Portátil:</label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={targetServer}
-                  onChange={(e) => setTargetServer(e.target.value)}
-                  placeholder="https://xxx.loca.lt o 192.168.1.8"
-                  className="flex-1 bg-neutral-900 border border-neutral-700 px-3 py-2 rounded-lg text-xs text-white font-mono focus:outline-none focus:border-sky-500 transition"
-                />
+          <div className="flex items-center gap-2 pt-1">
+            <label className="text-xs text-neutral-400 font-mono">Código:</label>
+            <input
+              type="text"
+              value={roomCode}
+              onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
+              placeholder="DYLAN"
+              className="flex-1 bg-neutral-900 border border-neutral-700 px-3 py-1.5 rounded-lg text-sm text-center font-mono font-bold tracking-widest text-sky-400 uppercase focus:outline-none focus:border-sky-500"
+            />
+            <button
+              onClick={() => connectToRoom(roomCode)}
+              className="bg-neutral-800 hover:bg-neutral-700 text-white px-3 py-1.5 rounded-lg text-xs font-mono font-medium transition cursor-pointer"
+            >
+              Unir
+            </button>
+          </div>
+        </div>
+
+        {/* Panel Desplegable de Personalización en Vivo */}
+        {showSettings && (
+          <div className="bg-neutral-950/90 border border-sky-900/50 rounded-xl p-4 space-y-4 text-xs font-mono">
+            <div className="font-bold text-sky-400 flex items-center justify-between">
+              <span>Personalizar Ventana en Pantalla</span>
+              <span className="text-[10px] text-neutral-400">En vivo</span>
+            </div>
+
+            {/* Posición de la ventana */}
+            <div className="space-y-1.5">
+              <label className="text-neutral-400">Posición en la pantalla:</label>
+              <div className="grid grid-cols-3 gap-2">
                 <button
-                  onClick={connectWebSocket}
-                  className="bg-sky-600 hover:bg-sky-500 text-white px-4 py-2 rounded-lg text-xs font-semibold transition cursor-pointer"
+                  onClick={() => {
+                    setPosition('top');
+                    broadcastSettings({ position: 'top' });
+                  }}
+                  className={`py-1.5 rounded flex items-center justify-center gap-1 border ${
+                    position === 'top' ? 'bg-sky-950 border-sky-500 text-sky-400' : 'bg-neutral-900 border-neutral-800'
+                  }`}
                 >
-                  Conectar
+                  <ArrowUp className="w-3 h-3" /> Arriba
+                </button>
+                <button
+                  onClick={() => {
+                    setPosition('middle');
+                    broadcastSettings({ position: 'middle' });
+                  }}
+                  className={`py-1.5 rounded flex items-center justify-center gap-1 border ${
+                    position === 'middle' ? 'bg-sky-950 border-sky-500 text-sky-400' : 'bg-neutral-900 border-neutral-800'
+                  }`}
+                >
+                  <AlignCenter className="w-3 h-3" /> Centro
+                </button>
+                <button
+                  onClick={() => {
+                    setPosition('bottom');
+                    broadcastSettings({ position: 'bottom' });
+                  }}
+                  className={`py-1.5 rounded flex items-center justify-center gap-1 border ${
+                    position === 'bottom' ? 'bg-sky-950 border-sky-500 text-sky-400' : 'bg-neutral-900 border-neutral-800'
+                  }`}
+                >
+                  <ArrowDown className="w-3 h-3" /> Abajo
                 </button>
               </div>
             </div>
-          ) : (
-            <div className="flex items-center justify-between pt-1">
-              <span className="text-xs text-neutral-400 font-mono truncate max-w-[200px]">
-                {targetServer}
-              </span>
-              <button
-                onClick={disconnectWebSocket}
-                className="text-xs text-neutral-400 hover:text-red-400 underline font-mono transition cursor-pointer"
-              >
-                Desconectar
-              </button>
+
+            {/* Tamaño de Fuente */}
+            <div className="space-y-1.5">
+              <div className="flex justify-between">
+                <span className="text-neutral-400">Tamaño de letra:</span>
+                <span className="text-white font-bold">{fontSize}px</span>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    const next = Math.max(16, fontSize - 2);
+                    setFontSize(next);
+                    broadcastSettings({ fontSize: next });
+                  }}
+                  className="flex-1 py-1.5 bg-neutral-900 border border-neutral-800 rounded hover:bg-neutral-800 flex items-center justify-center gap-1"
+                >
+                  <Minimize2 className="w-3 h-3" /> Reducir
+                </button>
+                <button
+                  onClick={() => {
+                    const next = Math.min(42, fontSize + 2);
+                    setFontSize(next);
+                    broadcastSettings({ fontSize: next });
+                  }}
+                  className="flex-1 py-1.5 bg-neutral-900 border border-neutral-800 rounded hover:bg-neutral-800 flex items-center justify-center gap-1"
+                >
+                  <Maximize2 className="w-3 h-3" /> Aumentar
+                </button>
+              </div>
             </div>
-          )}
-        </div>
+
+            {/* Límite de palabras en pantalla */}
+            <div className="space-y-1.5">
+              <div className="flex justify-between">
+                <span className="text-neutral-400">Cantidad de palabras visibles:</span>
+                <span className="text-white font-bold">{maxWords}</span>
+              </div>
+              <input
+                type="range"
+                min="6"
+                max="30"
+                step="2"
+                value={maxWords}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  setMaxWords(val);
+                  broadcastSettings({ maxWords: val });
+                }}
+                className="w-full accent-sky-500 cursor-pointer"
+              />
+            </div>
+
+            {/* Opacidad del Fondo */}
+            <div className="space-y-1.5">
+              <div className="flex justify-between">
+                <span className="text-neutral-400">Opacidad del fondo:</span>
+                <span className="text-white font-bold">{Math.round(bgOpacity * 100)}%</span>
+              </div>
+              <input
+                type="range"
+                min="0.1"
+                max="1.0"
+                step="0.1"
+                value={bgOpacity}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  setBgOpacity(val);
+                  broadcastSettings({ bgOpacity: val });
+                }}
+                className="w-full accent-sky-500 cursor-pointer"
+              />
+            </div>
+
+            {/* Color del Fondo */}
+            <div className="flex items-center justify-between pt-1">
+              <span className="text-neutral-400">Color de fondo:</span>
+              <div className="flex gap-2">
+                {['#0f172a', '#000000', '#1e1b4b', '#064e3b'].map((col) => (
+                  <button
+                    key={col}
+                    onClick={() => {
+                      setBgColor(col);
+                      broadcastSettings({ bgColor: col });
+                    }}
+                    style={{ backgroundColor: col }}
+                    className={`w-6 h-6 rounded-full border-2 transition ${
+                      bgColor === col ? 'border-sky-400 scale-110' : 'border-neutral-700'
+                    }`}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Errores */}
         {errorMsg && (
@@ -262,17 +422,12 @@ export default function SubtitulosMobilePage() {
           </div>
         )}
 
-        {/* Botón de Grabación */}
+        {/* Botón Principal de Grabación */}
         <div className="flex flex-col items-center gap-3">
           {!isRecording ? (
             <button
               onClick={startRecording}
-              disabled={!isConnected}
-              className={`w-full py-4 rounded-xl font-semibold text-base flex items-center justify-center gap-2.5 shadow-lg transition cursor-pointer ${
-                isConnected
-                  ? 'bg-emerald-600 hover:bg-emerald-500 text-white active:scale-[0.98]'
-                  : 'bg-neutral-800 text-neutral-500 cursor-not-allowed'
-              }`}
+              className="w-full py-4 rounded-xl font-semibold text-base flex items-center justify-center gap-2.5 shadow-lg bg-emerald-600 hover:bg-emerald-500 text-white active:scale-[0.98] transition cursor-pointer"
             >
               <Mic className="w-5 h-5" />
               <span>Iniciar captura de voz</span>
@@ -290,8 +445,8 @@ export default function SubtitulosMobilePage() {
           {/* Vúmetro */}
           <div className="w-full space-y-1.5 pt-1">
             <div className="flex items-center justify-between text-[11px] text-neutral-400 font-mono">
-              <span>Nivel de audio</span>
-              <span>{isRecording ? 'Transmitiendo' : 'En espera'}</span>
+              <span>Nivel de micrófono</span>
+              <span>{isRecording ? 'Transmitiendo' : 'En pausa'}</span>
             </div>
             <div className="w-full bg-neutral-950 h-2 rounded-full overflow-hidden border border-neutral-800">
               <div
@@ -304,15 +459,9 @@ export default function SubtitulosMobilePage() {
 
         {/* Monitor local en el celular */}
         <div className="bg-neutral-950 border border-neutral-800 rounded-xl p-4 min-h-[90px] flex flex-col justify-between space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-mono uppercase tracking-wider text-neutral-500 font-medium">
-              Monitor de transcripción
-            </span>
-            <span className="flex items-center gap-1 text-[10px] text-neutral-500 font-mono">
-              <ShieldCheck className="w-3 h-3 text-sky-400" />
-              <span>Flotando en PC</span>
-            </span>
-          </div>
+          <span className="text-[10px] font-mono uppercase tracking-wider text-neutral-500 font-medium">
+            Lo que se proyecta en tu portátil:
+          </span>
 
           <div className="text-sm leading-relaxed">
             {confirmedList.map((chunk, idx) => (
@@ -323,7 +472,7 @@ export default function SubtitulosMobilePage() {
             )}
             {!confirmedList.length && !lastPartial && (
               <span className="text-neutral-600 italic text-xs">
-                Inicia la captura y habla al micrófono...
+                Inicia la captura y habla...
               </span>
             )}
           </div>
