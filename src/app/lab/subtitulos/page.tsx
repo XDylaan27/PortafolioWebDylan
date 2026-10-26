@@ -26,12 +26,12 @@ export default function SubtitulosMobilePage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Ajustes de diseño de los subtítulos
-  const [fontSize, setFontSize] = useState(24);
-  const [bgOpacity, setBgOpacity] = useState(0.8);
+  const [fontSize, setFontSize] = useState(26);
+  const [bgOpacity, setBgOpacity] = useState(0.85);
   const [bgColor, setBgColor] = useState('#020617');
   const [textColor, setTextColor] = useState('#ffffff');
   const [maxWords, setMaxWords] = useState(14);
-  const [isOverlayVisible, setIsOverlayVisible] = useState(true);
+  const [isOverlayVisible, setIsOverlayVisible] = useState(false); // DESACTIVADA POR DEFECTO
   const [showSettings, setShowSettings] = useState(false);
 
   const channelRef = useRef<any>(null);
