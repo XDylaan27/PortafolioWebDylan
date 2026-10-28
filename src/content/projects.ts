@@ -16,6 +16,17 @@ export interface Project {
 
 export const PROJECTS: Project[] = [
   {
+    slug: 'stoky-catalogo',
+    title: 'Stoky — Catálogo & Mercado de Stickers',
+    category: 'web-app',
+    summary: 'Catálogo editorial por hojas con carrito de pedidos masivos para WhatsApp con cero peticiones a la API.',
+    description: 'Galería paginada estilo álbum para explorar y seleccionar stickers animados generados desde TikTok. Permite armar un carrito de stickers favoritos y solicitar la entrega por lotes a Stoky en WhatsApp sin consumo de cuotas.',
+    year: '2026',
+    status: 'live',
+    tags: ['Next.js 15', 'WhatsApp Bot', 'Catálogo Editorial', 'Carrito', 'Tailwind v4'],
+    featured: true,
+  },
+  {
     slug: 'subtitulos',
     title: 'Subtítulos en Tiempo Real — Móvil a PC',
     category: 'ai',
