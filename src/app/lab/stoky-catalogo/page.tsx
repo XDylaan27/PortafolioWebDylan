@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   ShoppingBag,
   Send,
@@ -12,13 +12,21 @@ import {
   Layers,
   X,
   Check,
-  Plus
+  Plus,
+  CheckSquare,
+  Square,
+  SlidersHorizontal,
+  RefreshCw,
+  AlertCircle
 } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 import { STOKY_CATALOG, CatalogSticker } from '@/lib/stoky-catalog-data';
 
-const ITEMS_PER_PAGE = 6; // 6 stickers por "hoja" (cuadrícula compacta de 2 o 3 columnas)
+const ITEMS_PER_PAGE = 6; // 6 stickers por "hoja"
 
 export default function StokyCatalogoPage() {
+  const [stickers, setStickers] = useState<CatalogSticker[]>(STOKY_CATALOG);
+  const [isLoading, setIsLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageDirection, setPageDirection] = useState<'next' | 'prev' | null>(null);
   const [isTurning, setIsTurning] = useState(false);
@@ -27,13 +35,106 @@ export default function StokyCatalogoPage() {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [activeModalSticker, setActiveModalSticker] = useState<CatalogSticker | null>(null);
 
-  // Filtrado
+  // Modo edición secreto (5 clicks en "Catálogo")
+  const [secretClicks, setSecretClicks] = useState(0);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [selectedForDeletion, setSelectedForDeletion] = useState<string[]>([]);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Cargar stickers desde Supabase con sincronización Realtime
+  const fetchStickers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('stoky_stickers')
+        .select('*')
+        .order('code', { ascending: true });
+
+      if (error) {
+        console.warn('Error consultando Supabase, usando catálogo local:', error.message);
+        return;
+      }
+
+      if (data && data.length > 0) {
+        const mapped: CatalogSticker[] = data.map((item) => ({
+          id: item.id,
+          code: item.code,
+          title: item.title || `Sticker ${item.code}`,
+          previewUrl: item.preview_url
+        }));
+        setStickers(mapped);
+      }
+    } catch (err) {
+      console.warn('Fallo de conexión con Supabase:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchStickers();
+
+    // Suscripción Realtime a cambios en la tabla stoky_stickers
+    const channel = supabase
+      .channel('stoky_stickers_live')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'stoky_stickers' },
+        () => {
+          fetchStickers();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  // Manejador del clic secreto en la palabra "Catálogo" (5 clics)
+  const handleSecretClick = () => {
+    if (clickTimeoutRef.current) {
+      clearTimeout(clickTimeoutRef.current);
+    }
+
+    setSecretClicks((prev) => {
+      const nextClicks = prev + 1;
+      if (nextClicks >= 5) {
+        setIsEditMode((current) => {
+          const nextState = !current;
+          if (nextState) {
+            setActionNotice('Modo administración activado. Selecciona los stickers que deseas eliminar.');
+          } else {
+            setActionNotice(null);
+            setSelectedForDeletion([]);
+          }
+          return nextState;
+        });
+        return 0;
+      }
+      return nextClicks;
+    });
+
+    clickTimeoutRef.current = setTimeout(() => {
+      setSecretClicks(0);
+    }, 3500);
+  };
+
+  // Selección individual para eliminación
+  const toggleSelectForDeletion = (stickerId: string) => {
+    setSelectedForDeletion((prev) =>
+      prev.includes(stickerId) ? prev.filter((id) => id !== stickerId) : [...prev, stickerId]
+    );
+  };
+
+  // Filtrado de búsqueda
   const filteredStickers = useMemo(() => {
-    return STOKY_CATALOG.filter((item) => {
+    return stickers.filter((item) => {
       const q = searchQuery.toLowerCase();
       return item.code.toLowerCase().includes(q) || item.title.toLowerCase().includes(q);
     });
-  }, [searchQuery]);
+  }, [stickers, searchQuery]);
 
   // Paginación por hojas
   const totalPages = Math.max(1, Math.ceil(filteredStickers.length / ITEMS_PER_PAGE));
@@ -72,7 +173,50 @@ export default function StokyCatalogoPage() {
     setCart([]);
   };
 
-  // Enlace oficial de WhatsApp (Click-to-chat Meta)
+  // Eliminar stickers seleccionados en Supabase
+  const handleDeleteSelected = async () => {
+    if (selectedForDeletion.length === 0) return;
+
+    const confirmMsg = `¿Deseas eliminar permanentemente los ${selectedForDeletion.length} stickers seleccionados?`;
+    if (!window.confirm(confirmMsg)) return;
+
+    setIsDeleting(true);
+    try {
+      const { error } = await supabase
+        .from('stoky_stickers')
+        .delete()
+        .in('id', selectedForDeletion);
+
+      if (error) {
+        alert(`Error al eliminar: ${error.message}`);
+        return;
+      }
+
+      // Remover del estado local
+      setStickers((prev) => prev.filter((s) => !selectedForDeletion.includes(s.id)));
+      setCart((prev) => prev.filter((s) => !selectedForDeletion.includes(s.id)));
+      setSelectedForDeletion([]);
+      setActionNotice('Stickers eliminados correctamente del catálogo.');
+      setTimeout(() => setActionNotice(null), 4000);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error desconocido';
+      alert(`Fallo al eliminar: ${msg}`);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const toggleSelectAllPage = () => {
+    const pageIds = pageStickers.map((s) => s.id);
+    const allSelected = pageIds.every((id) => selectedForDeletion.includes(id));
+    if (allSelected) {
+      setSelectedForDeletion((prev) => prev.filter((id) => !pageIds.includes(id)));
+    } else {
+      setSelectedForDeletion((prev) => Array.from(new Set([...prev, ...pageIds])));
+    }
+  };
+
+  // Enlace oficial de WhatsApp
   const getWhatsAppCartUrl = () => {
     if (cart.length === 0) return '#';
     const codesString = cart.map((s) => s.code).join(' ');
@@ -95,22 +239,39 @@ export default function StokyCatalogoPage() {
               <BookOpen className="w-3.5 h-3.5 text-neutral-400" />
               <span>Álbum de Estampas / Catálogo Físico</span>
             </div>
-            <h1 className="text-3xl sm:text-4xl font-serif-editorial font-light tracking-tight text-white">
-              Catálogo de Stickers Stoky
+            <h1 className="text-3xl sm:text-4xl font-serif-editorial font-light tracking-tight text-white select-none">
+              <span
+                onClick={handleSecretClick}
+                className="cursor-pointer transition-colors hover:text-neutral-200"
+                title="Catálogo"
+              >
+                Catálogo
+              </span>{' '}
+              de Stickers Stoky
             </h1>
           </div>
 
-          {/* Botón de Carrito */}
-          <button
-            onClick={() => setIsCartOpen(true)}
-            className="flex items-center gap-2.5 px-4 py-2 bg-white text-neutral-950 rounded-sm font-mono text-xs uppercase tracking-wider font-semibold hover:bg-neutral-200 transition-colors shadow-sm"
-          >
-            <ShoppingBag className="w-4 h-4 text-neutral-950" />
-            <span>Carrito</span>
-            <span className="bg-neutral-950 text-white text-[10px] px-1.5 py-0.2 rounded-full font-mono">
-              {cart.length}
-            </span>
-          </button>
+          {/* Botones Superiores: Carrito y Actualizar */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => fetchStickers()}
+              className="p-2 border border-neutral-800 bg-neutral-900/60 hover:bg-neutral-800 text-neutral-400 hover:text-white rounded-sm transition-colors"
+              title="Refrescar catálogo en vivo"
+            >
+              <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin text-white' : ''}`} />
+            </button>
+
+            <button
+              onClick={() => setIsCartOpen(true)}
+              className="flex items-center gap-2.5 px-4 py-2 bg-white text-neutral-950 rounded-sm font-mono text-xs uppercase tracking-wider font-semibold hover:bg-neutral-200 transition-colors shadow-sm"
+            >
+              <ShoppingBag className="w-4 h-4 text-neutral-950" />
+              <span>Carrito</span>
+              <span className="bg-neutral-950 text-white text-[10px] px-1.5 py-0.2 rounded-full font-mono">
+                {cart.length}
+              </span>
+            </button>
+          </div>
         </div>
 
         {/* Buscador */}
@@ -129,6 +290,57 @@ export default function StokyCatalogoPage() {
             />
           </div>
         </div>
+
+        {/* Barra de Modo Edición Secreto */}
+        {isEditMode && (
+          <div className="p-3 bg-red-950/40 border border-red-800/80 rounded-sm space-y-2 animate-in fade-in duration-200">
+            <div className="flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
+              <div className="flex items-center gap-2 text-red-300">
+                <SlidersHorizontal className="w-4 h-4 text-red-400" />
+                <span className="font-semibold uppercase tracking-wider">Modo Administración Activo</span>
+                <span className="text-neutral-400">({selectedForDeletion.length} seleccionados)</span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={toggleSelectAllPage}
+                  className="px-2.5 py-1 bg-neutral-900 border border-neutral-700 hover:border-neutral-500 text-neutral-300 hover:text-white rounded-sm text-[11px] uppercase tracking-wider transition-colors"
+                >
+                  Seleccionar Hoja
+                </button>
+                <button
+                  onClick={handleDeleteSelected}
+                  disabled={selectedForDeletion.length === 0 || isDeleting}
+                  className="flex items-center gap-1.5 px-3 py-1 bg-red-600 hover:bg-red-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-sm font-semibold text-[11px] uppercase tracking-wider transition-colors"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>{isDeleting ? 'Eliminando...' : `Eliminar (${selectedForDeletion.length})`}</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setIsEditMode(false);
+                    setSelectedForDeletion([]);
+                  }}
+                  className="p-1 text-neutral-400 hover:text-white rounded-sm transition-colors"
+                  title="Cerrar modo edición"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+            <p className="text-[11px] font-mono text-neutral-400">
+              Toca cualquier sticker para marcarlo o desmarcarlo para eliminación permanente.
+            </p>
+          </div>
+        )}
+
+        {/* Mensaje de Notificación */}
+        {actionNotice && !isEditMode && (
+          <div className="flex items-center gap-2 p-2.5 bg-neutral-900 border border-neutral-700 rounded-sm text-xs font-mono text-neutral-300 animate-in fade-in">
+            <AlertCircle className="w-4 h-4 text-emerald-400" />
+            <span>{actionNotice}</span>
+          </div>
+        )}
       </header>
 
       {/* Indicador de Hoja y Controles Superiores */}
@@ -162,33 +374,77 @@ export default function StokyCatalogoPage() {
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
               {pageStickers.map((sticker) => {
                 const inCart = isInCart(sticker.id);
+                const isSelectedForDel = selectedForDeletion.includes(sticker.id);
+
                 return (
                   <div
                     key={sticker.id}
-                    className="group relative border border-neutral-800/90 bg-neutral-900/50 hover:bg-neutral-900 rounded-sm p-3 space-y-2.5 hover:border-neutral-600 transition-all flex flex-col justify-between shadow-sm"
+                    onClick={() => {
+                      if (isEditMode) {
+                        toggleSelectForDeletion(sticker.id);
+                      }
+                    }}
+                    className={`group relative border rounded-sm p-3 space-y-2.5 transition-all flex flex-col justify-between shadow-sm cursor-pointer ${
+                      isEditMode
+                        ? isSelectedForDel
+                          ? 'border-red-600 bg-red-950/20 ring-1 ring-red-600'
+                          : 'border-neutral-800 bg-neutral-900/60 hover:border-neutral-600'
+                        : 'border-neutral-800/90 bg-neutral-900/50 hover:bg-neutral-900 hover:border-neutral-600'
+                    }`}
                   >
-                    {/* Código de Estampa */}
+                    {/* Código de Estampa y Selección */}
                     <div className="flex items-center justify-between text-xs font-mono">
                       <span className="px-2 py-0.5 bg-neutral-800 text-neutral-100 border border-neutral-700/80 rounded-sm font-semibold tracking-wider text-[11px]">
                         {sticker.code}
                       </span>
-                      <button
-                        onClick={() => toggleCart(sticker)}
-                        className={`p-1 rounded-sm border transition-colors ${
-                          inCart
-                            ? 'bg-neutral-800 text-emerald-400 border-neutral-700'
-                            : 'bg-neutral-950 text-neutral-400 border-neutral-800 hover:text-white hover:border-neutral-600'
-                        }`}
-                        title={inCart ? 'En Carrito' : 'Añadir al Carrito'}
-                      >
-                        {inCart ? <Check className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
-                      </button>
+
+                      {isEditMode ? (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleSelectForDeletion(sticker.id);
+                          }}
+                          className={`p-1 rounded-sm border transition-colors ${
+                            isSelectedForDel
+                              ? 'bg-red-600 text-white border-red-500'
+                              : 'bg-neutral-950 text-neutral-400 border-neutral-800 hover:text-white'
+                          }`}
+                        >
+                          {isSelectedForDel ? (
+                            <CheckSquare className="w-3.5 h-3.5" />
+                          ) : (
+                            <Square className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleCart(sticker);
+                          }}
+                          className={`p-1 rounded-sm border transition-colors ${
+                            inCart
+                              ? 'bg-neutral-800 text-emerald-400 border-neutral-700'
+                              : 'bg-neutral-950 text-neutral-400 border-neutral-800 hover:text-white hover:border-neutral-600'
+                          }`}
+                          title={inCart ? 'En Carrito' : 'Añadir al Carrito'}
+                        >
+                          {inCart ? <Check className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+                        </button>
+                      )}
                     </div>
 
                     {/* Contenedor compacto del Sticker WebP */}
                     <div
-                      onClick={() => setActiveModalSticker(sticker)}
-                      className="relative w-full aspect-square bg-neutral-950/80 border border-neutral-800/60 rounded-sm overflow-hidden flex items-center justify-center p-2.5 cursor-pointer group-hover:border-neutral-700 transition-colors"
+                      onClick={(e) => {
+                        if (!isEditMode) {
+                          e.stopPropagation();
+                          setActiveModalSticker(sticker);
+                        }
+                      }}
+                      className="relative w-full aspect-square bg-neutral-950/80 border border-neutral-800/60 rounded-sm overflow-hidden flex items-center justify-center p-2.5 group-hover:border-neutral-700 transition-colors"
                     >
                       <img
                         src={sticker.previewUrl}
@@ -199,12 +455,19 @@ export default function StokyCatalogoPage() {
                     </div>
 
                     {/* Botón inferior rápido */}
-                    <button
-                      onClick={() => setActiveModalSticker(sticker)}
-                      className="w-full py-1 text-[11px] font-mono uppercase tracking-wider text-neutral-400 hover:text-white border border-neutral-800/80 hover:border-neutral-700 rounded-sm text-center transition-colors"
-                    >
-                      Ver Ficha
-                    </button>
+                    {isEditMode ? (
+                      <div className="w-full py-1 text-[11px] font-mono uppercase tracking-wider text-center text-red-400 border border-red-950 rounded-sm">
+                        {isSelectedForDel ? 'Marcado para borrar' : 'Toca para marcar'}
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setActiveModalSticker(sticker)}
+                        className="w-full py-1 text-[11px] font-mono uppercase tracking-wider text-neutral-400 hover:text-white border border-neutral-800/80 hover:border-neutral-700 rounded-sm text-center transition-colors"
+                      >
+                        Ver Ficha
+                      </button>
+                    )}
                   </div>
                 );
               })}
