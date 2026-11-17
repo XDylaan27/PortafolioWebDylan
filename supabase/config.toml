@@ -1,0 +1,7 @@
+project_id = "PortafolioWebDylan"
+
+[functions.send-order-reminders]
+verify_jwt = false
+
+[functions.send-cuenta-clara]
+verify_jwt = false

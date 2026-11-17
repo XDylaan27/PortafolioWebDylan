@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { disableAllPush } from '@/lib/push';
 import type { User } from '@supabase/supabase-js';
 import { LogIn, LogOut, User as UserIcon, Eye, EyeOff, X, Loader2 } from 'lucide-react';
 
@@ -220,6 +221,7 @@ export default function AuthWidget() {
   };
 
   const handleSignOut = async () => {
+    await disableAllPush().catch(() => undefined);
     await supabase.auth.signOut();
   };
 

@@ -1,5 +1,5 @@
-import { redirect } from 'next/navigation';
+import NodeCodeViewer from '@/components/code-viewer/NodeCodeViewer';
 
 export default function LabCodigoNodePage() {
-  redirect('/codigo-de-clase-node');
+  return <NodeCodeViewer />;
 }

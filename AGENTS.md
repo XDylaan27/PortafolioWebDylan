@@ -1,185 +1,89 @@
-# Guía de Arquitectura y Contexto para Asistentes de IA (AGENTS.md)
+# Guía de arquitectura para asistentes
 
-Este documento contiene toda la información técnica, reglas de diseño, estructura de rutas y convenciones necesarias para que cualquier Inteligencia Artificial o desarrollador entienda el portafolio y pueda crear nuevos proyectos interactivos sin romper la arquitectura existente.
+## Contexto
 
----
+- Propietario: Dylan. Proyecto: PortafolioWebDylan.
+- Producción: https://portafoliowebdylan.vercel.app/
+- Repositorio: https://github.com/XDylaan27/PortafolioWebDylan.git
+- Rama principal: main. Un push a main activa el despliegue de Vercel.
+- Stack: Next.js 15 App Router, React 19, TypeScript estricto, Tailwind CSS v4, Supabase y Lucide React.
 
-## 1. Información General y Repositorio
+## Reglas obligatorias
 
-- **Propietario / Desarrollador:** Dylan
-- **Nombre del Proyecto:** `PortafolioWebDylan`
-- **URL de Producción / Sitio Web en Vivo:** `https://portafoliowebdylan.vercel.app/`
-- **Repositorio Remoto (GitHub):** `https://github.com/XDylaan27/PortafolioWebDylan.git`
-- **Rama Principal:** `main`
-- **Plataforma de Despliegue:** [Vercel](https://vercel.com) (despliegue continuo automático en cada `git push origin main`)
-- **Stack Tecnológico:**
-  - **Framework:** Next.js 15 (App Router)
-  - **Librería UI:** React 19
-  - **Lenguaje:** TypeScript 5.7+ (configuración estricta)
-  - **Estilos:** Tailwind CSS v4 (`@tailwindcss/postcss`)
-  - **Base de Datos & Realtime:** Supabase (`@supabase/supabase-js`)
-  - **Iconografía:** Lucide React (`lucide-react`)
-  - **Efectos:** `canvas-confetti`
+1. No usar emojis en interfaces, textos, botones, tooltips ni comentarios. Usar iconos SVG de lucide-react para acciones visuales y verificar que existan en la versión instalada.
+2. Cada proyecto vive en src/app/lab/[slug]/. No crear aplicaciones nuevas fuera de /lab. El layout compartido añade navegación de retorno y autenticación.
+3. Registrar cada aplicación en src/content/projects.ts. No enlazar entradas sin una ruta implementada.
+4. Ejecutar npm run build y corregir errores antes de hacer push. npm run typecheck también está disponible; no afirmar que existe ESLint.
+5. Variables de navegador: prefijo NEXT_PUBLIC_, tipo Config en Vercel. Nunca exponer claves privadas, service_role ni credenciales de envío con ese prefijo.
+6. Mantener .env.local ignorado por Git y .env.example libre de secretos.
+7. Usar Tailwind oscuro en el laboratorio: bg-neutral-950, border-neutral-800, text-white y text-neutral-400. Conservar los temas propios de herramientas existentes.
+8. Separar responsabilidades cuando una página combine muchos flujos. Evitar refactorizaciones masivas ajenas a la tarea.
 
----
+## Organización actual
 
-## 2. Reglas de Oro para Asistentes de IA
+- src/app/page.tsx: portada editorial y filtros.
+- src/app/layout.tsx, globals.css, manifest.ts: base y PWA.
+- src/app/lab/layout.tsx: navegación compartida y autenticación.
+- Aplicaciones: stoky-catalogo, subtitulos, codigo-node, calculadora, pedidos-amigos, apuesta-puntaje y template-lab.
+- Cuenta Clara: /lab/cuenta-clara, aplicación privada registrada con visibility=private y excluida de todos los listados públicos. Mantener noindex, entrada de cuatro clics en contacto y autorización real en Supabase.
+- src/app/codigo-de-clase-node/: redirección heredada a /lab/codigo-node.
+- src/app/api/bets/: listar, crear, participar y resolver salas.
+- src/app/api/supabase-ping/: comprobación de conexión.
+- src/components/: autenticación, PWA y carpetas calculator, code-viewer y orders.
+- src/content/: catálogo de proyectos y archivos estáticos de clase.
+- src/lib/: cliente Supabase, apuestas, catálogo y suscripción push.
+- public/sw.js: recepción de Web Push.
+- supabase/functions/, migrations/, tests/: backend de recordatorios y pruebas.
+- docs/PUSH_NOTIFICATIONS.md: configuración, límites y diagnóstico.
 
-Cualquier IA que genere o modifique código en este repositorio **DEBE** respetar estas directivas:
+## Supabase
 
-1. **PROHIBIDO EL USO DE EMOJIS:**
-   - No usar emojis (🚫 nada de 🏆, 🔒, 🟢, 🎯, 🎉, etc.) en texto, botones, tooltips ni comentarios visibles.
-   - En su lugar, **usar exclusivamente iconos vectoriales SVG de `lucide-react`** (ej: `Trophy`, `Lock`, `Target`, `Users`, `Radio`, `CheckCircle2`, `ArrowRight`, `Plus`, etc.).
-2. **Arquitectura Modular por Subrutas (`/lab/[slug]`):**
-   - El portafolio principal y los proyectos conviven en un solo despliegue.
-   - Cada proyecto o experimento interactivo vive de forma aislada bajo `src/app/lab/[slug]/`.
-   - Nunca crear proyectos en la raíz `src/app/` que colisionen con el portafolio editorial.
-3. **Registro Obligatorio en `src/content/projects.ts`:**
-   - Todo proyecto que se agregue al lab debe registrarse en el arreglo `PROJECTS` de `src/content/projects.ts` para que aparezca en el índice del portafolio.
-4. **Verificación de Compilación Antes de Confirmar:**
-   - Siempre verificar que `npm run build` compile sin errores de TypeScript ni de paquetes antes de hacer push.
-5. **Variables de Entorno Públicas:**
-   - Cualquier variable consumida en el navegador debe llevar el prefijo `NEXT_PUBLIC_` y configurarse como tipo **Config** en Vercel (nunca como *Secret*).
+Proyecto PortafolioWebDatabase, referencia mpltesmsnwsxfkdmybbm. Configuración local:
 
----
+    NEXT_PUBLIC_SUPABASE_URL=https://mpltesmsnwsxfkdmybbm.supabase.co
+    NEXT_PUBLIC_SUPABASE_ANON_KEY=clave_publica
 
-## 3. Estructura de Carpetas y Rutas
+Importar el cliente desde @/lib/supabase. Pedidos usa Auth y RLS por user_id; los filtros del cliente no sustituyen la autorización.
 
-```text
-PortafolioWebDylan/
-├── .env.local                   # Credenciales locales de Supabase (ignorado en git)
-├── .gitignore                   # Protección de credenciales y node_modules
-├── next.config.ts               # Configuración de Next.js (devIndicators deshabilitados)
-├── package.json                 # Dependencias y scripts
-├── tsconfig.json                # Configuración TypeScript (alias @/* -> ./src/*)
-├── src/
-│   ├── app/
-│   │   ├── layout.tsx           # Layout general de la aplicación (html, body, fuentes)
-│   │   ├── globals.css          # Estilos globales y directivas de Tailwind v4
-│   │   ├── page.tsx             # Portafolio Principal (Hero editorial, destacados y filtros)
-│   │   │
-│   │   ├── lab/                 # ZONA DE PROYECTOS INDEPENDIENTES
-│   │   │   ├── layout.tsx       # Layout persistente para /lab/* con barra superior de retorno
-│   │   │   │
-│   │   │   ├── template-lab/    # Plantilla base para clonar nuevos proyectos
-│   │   │   │   └── page.tsx
-│   │   │   │
-│   │   │   └── apuesta-puntaje/ # Proyecto: Apuestas y Quiniela en Vivo
-│   │   │       ├── page.tsx     # Directorio de apuestas, filtros, búsqueda y formulario
-│   │   │       └── [code]/
-│   │   │           └── page.tsx # Sala en vivo con Supabase Realtime y podio
-│   │   │
-│   │   └── api/                 # ENDPOINTS BACKEND (Next.js Route Handlers)
-│   │       └── bets/
-│   │           ├── route.ts         # GET (listar apuestas), POST (crear apuesta)
-│   │           └── [code]/route.ts  # GET (sala/participantes), POST (votar), PATCH (resolver)
-│   │
-│   ├── content/
-│   │   └── projects.ts          # Metadata centralizada de los proyectos (PROJECTS array)
-│   │
-│   └── lib/
-│       ├── supabase.ts          # Cliente singleton de Supabase (@supabase/supabase-js)
-│       └── bets.ts              # Utilidades, cálculo de diferencias, hash SHA-256 y tipos
-```
+Tablas: profiles; bet_rooms y bet_participants; friend_contacts, friend_orders, friend_order_items y friend_order_reminders; stoky_stickers; order_push_subscriptions y order_push_deliveries. También existe usuarios, ajena a pedidos.
 
----
+Cuenta Clara usa las tablas cc_*, el bucket privado cc-proofs y las RPC cc_state/cc_action. No permitir escritura directa ni edición de movimientos confirmados. Las anulaciones aceptadas generan compensaciones. Mantener montos enteros transmitidos como cadenas y saldo calculado con precisión BigInt. Ver docs/CUENTA_CLARA.md.
 
-## 4. Base de Datos y Backend (Supabase)
+RPC previas: check_username_available, get_email_by_username, resolve_bet_room. Bucket de imágenes: order-images. La migración push es incremental; no reconstruye las tablas históricas.
 
-El proyecto utiliza **Supabase** como BaaS (Backend-as-a-Service).
+Para cambios SQL, crear una migración con Supabase CLI, revisar privilegios, RLS e índices, aplicarla y comprobar el resultado. Nunca guardar secretos en SQL versionado.
 
-### Variables Requeridas en `.env.local` y Vercel:
-```bash
-NEXT_PUBLIC_SUPABASE_URL=https://mpltesmsnwsxfkdmybbm.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-```
-*(En Vercel deben ser de tipo **Config** para permitir el prefijo `NEXT_PUBLIC_`).*
+## Recordatorios Web Push
 
-### Tablas Existentes en Postgres:
-1. **`public.bet_rooms`**:
-   - `id` (UUID, PK)
-   - `code` (VARCHAR(12), UNIQUE): Código alfanumérico amigable de 6 caracteres (ej: `HA5FSH`).
-   - `title` (TEXT): Nombre de la apuesta.
-   - `description` (TEXT, Nullable): Reglas o detalles.
-   - `creator_name` (TEXT): Nombre del creador.
-   - `password_hash` (TEXT): Hash SHA-256 de la contraseña para resolver la sala.
-   - `status` (TEXT): `'open'` o `'finished'`.
-   - `final_score` (NUMERIC, Nullable): Resultado oficial final.
-   - `created_at` (TIMESTAMPTZ).
-2. **`public.bet_participants`**:
-   - `id` (UUID, PK)
-   - `room_id` (UUID, FK a `bet_rooms.id` ON DELETE CASCADE).
-   - `name` (TEXT): Nombre del participante.
-   - `predicted_score` (NUMERIC): Pronóstico secreto.
-   - `created_at` (TIMESTAMPTZ).
-   - `CONSTRAINT unique_room_participant UNIQUE(room_id, name)`: Evita nombres repetidos en la misma sala.
+- La programación corre cada minuto en Supabase Cron, no en el navegador ni en Vercel.
+- send-order-reminders autoriza el cron con un secreto privado y las pruebas con el JWT verificado del usuario. verify_jwt=false permite ambos mecanismos; nunca eliminar la autenticación interna.
+- Supabase Vault guarda el JSON order_push_config con claves VAPID y secreto de cron. La copia local ORDER_PUSH_CONFIG es privada y opcional para recuperación.
+- get_order_push_public_key solo devuelve la clave pública a usuarios autenticados.
+- get_order_push_config, claim_order_push_deliveries y complete_order_push_delivery son exclusivos de service_role.
+- Las suscripciones son privadas por usuario. Las entregas no tienen políticas de cliente deliberadamente: solo las procesa el servidor.
+- La cola reserva entregas por dispositivo, reintenta fallos y elimina endpoints caducados. Enviado significa aceptación del proveedor, no lectura.
+- Los dispositivos se comparten entre proyectos mediante push_topic_preferences (orders y cuenta-clara). Desactivar un tema no debe cancelar el otro. Cuenta Clara tiene su propia función send-cuenta-clara y solo envía texto genérico sin datos financieros.
+- No reintroducir temporizadores de frontend como mecanismo de notificación. Un intervalo para refrescar el estado visual es válido.
+- La recepción depende de permisos, red y ajustes del sistema. En iPhone se requiere instalación en pantalla de inicio y una versión compatible.
 
-### Publicación Realtime:
-Ambas tablas están agregadas a la publicación de Supabase:
-```sql
-ALTER PUBLICATION supabase_realtime ADD TABLE public.bet_rooms, public.bet_participants;
-```
+## Contrato de subtítulos
 
----
+Este repositorio contiene solo la parte del celular. La aplicación independiente del portátil recibe el audio, lo transcribe y muestra los subtítulos. El audio se transporta mediante Supabase Realtime Broadcast. Conservar formatos y nombres de eventos: audio_chunk, subtitle_feedback, settings_update, mobile_ping y pc_pong. No afirmar que el audio nunca pasa por servidores externos.
 
-## 5. Protocolo para Crear un Nuevo Proyecto / Experimento
+## Crear una aplicación
 
-Cualquier chat o desarrollador que reciba la instrucción de añadir un nuevo proyecto debe seguir **estrictamente estos 4 pasos**:
+1. Crear src/app/lab/[slug]/page.tsx desde la plantilla. Añadir use client si necesita interacción en el navegador.
+2. Mantener navegación compartida, diseño oscuro e iconos Lucide.
+3. Registrar título, categoría, resumen, descripción, año, estado, etiquetas y destacado en PROJECTS.
+4. Usar Route Handlers bajo src/app/api/[modulo]/ o funciones Supabase según el flujo. Versionar SQL y verificar controles de acceso.
+5. Ejecutar npm run build y revisar el diff antes de publicar. No incluir .env.local.
 
-### Paso 1: Crear la subruta bajo `src/app/lab/[nuevo-slug]/`
-1. Crear la carpeta `src/app/lab/[nuevo-slug]/`.
-2. Crear `page.tsx` con directiva `'use client';` si utiliza hooks interactivos.
-3. El proyecto hereda automáticamente la cabecera con botón de "Volver al portafolio" provista por `src/app/lab/layout.tsx`.
-4. Diseñar con estilos de Tailwind en modo oscuro (`bg-neutral-950`, bordes `border-neutral-800`, textos `text-white` y `text-neutral-400`).
-5. Usar iconos de `lucide-react` para cada acción visual (nunca emojis).
+## Verificación
 
-### Paso 2: Registrar el proyecto en `src/content/projects.ts`
-Abrir `src/content/projects.ts` y añadir la entrada al array `PROJECTS`:
-```typescript
-{
-  slug: 'nombre-del-slug',
-  title: 'Título Claro del Proyecto',
-  category: 'web-app', // 'web-app' | 'tool' | 'ai' | 'experiment' | 'design-system'
-  summary: 'Resumen conciso en una oración.',
-  description: 'Descripción más amplia de las funcionalidades y tecnologías.',
-  year: '2026',
-  status: 'live',      // 'live' | 'wip' | 'concept'
-  tags: ['Next.js', 'React', 'Tailwind'],
-  featured: true,      // true si debe destacar en portada
-}
-```
+    npm ci
+    npm run typecheck
+    npm run test:push
+    npm run build
+    npm audit
 
-### Paso 3: Integración de Backend o Base de Datos (Si aplica)
-- Si el proyecto requiere persistencia, importar el cliente Supabase desde `@/lib/supabase`:
-  ```typescript
-  import { supabase } from '@/lib/supabase';
-  ```
-- Si requiere operaciones seguras de servidor o enmascaramiento de datos, crear Route Handlers bajo `src/app/api/[nombre-modulo]/route.ts`.
-
-### Paso 4: Validar y Desplegar
-Ejecutar en la terminal:
-```bash
-npm run build
-```
-Si el resultado es `✓ Compiled successfully`, hacer commit y push:
-```bash
-git add .
-git commit -m "feat: add [nombre-del-proyecto] project to lab"
-git push origin main
-```
-Vercel compilará y publicará la nueva subruta automáticamente.
-
----
-
-## 6. Comandos de Terminal Habituales
-
-| Acción | Comando PowerShell / Bash |
-| :--- | :--- |
-| Servidor de desarrollo | `npm run dev` (abre en `http://localhost:3000`) |
-| Compilación de prueba | `npm run build` |
-| Ver estado de Git | `git status` |
-| Subir cambios a producción | `git add . ; git commit -m "mensaje" ; git push origin main` |
-
----
-
-> **Nota para IAs:** Al interactuar con el usuario, mantener un tono técnico, claro y profesional. No usar emojis en las interfaces de código que generes.
+Para push, ejecutar además las pruebas SQL transaccionales y comprobar función desplegada, cron y recepción en un dispositivo suscrito. No confundir una respuesta aceptada con una notificación efectivamente mostrada.

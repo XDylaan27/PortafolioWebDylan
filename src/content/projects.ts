@@ -12,9 +12,22 @@ export interface Project {
   externalUrl?: string; // Por si algún proyecto vive fuera o tiene repo específico
   githubUrl?: string;
   featured?: boolean;
+  visibility?: 'public' | 'private';
 }
 
 export const PROJECTS: Project[] = [
+  {
+    slug: 'cuenta-clara',
+    title: 'Cuenta Clara',
+    category: 'web-app',
+    summary: 'Cuenta compartida privada con movimientos y confirmaciones.',
+    description: 'Registro privado de deudas y abonos, comprobantes y anulaciones con aprobación de ambos participantes.',
+    year: '2026',
+    status: 'live',
+    tags: ['Supabase', 'Realtime', 'Web Push'],
+    featured: false,
+    visibility: 'private',
+  },
   {
     slug: 'stoky-catalogo',
     title: 'Stoky — Catálogo & Mercado de Stickers',
@@ -30,11 +43,11 @@ export const PROJECTS: Project[] = [
     slug: 'subtitulos',
     title: 'Subtítulos en Tiempo Real — Móvil a PC',
     category: 'ai',
-    summary: 'Captura de voz remota desde Android y transcripción en streaming mediante sherpa-onnx local.',
-    description: 'Herramienta de accesibilidad que convierte el micrófono del celular en un emisor de audio de baja latencia vía WebSocket. Procesa el audio localmente en la laptop mediante modelos Zipformer en español sin enviar datos a servidores externos.',
+    summary: 'Habla desde el celular y muestra subtítulos en vivo en la pantalla de tu portátil.',
+    description: 'Este portafolio aloja la interfaz móvil: captura el micrófono, envía el audio mediante Supabase Realtime y permite ajustar los subtítulos. Una aplicación independiente instalada en el portátil recibe el audio, lo transcribe y muestra el texto en vivo. La aplicación del portátil se mantiene fuera de este repositorio.',
     year: '2026',
     status: 'live',
-    tags: ['sherpa-onnx', 'WebSockets', 'Web Audio API', 'TypeScript', 'AI Streaming'],
+    tags: ['Supabase Realtime', 'Web Audio API', 'TypeScript', 'Subtítulos en vivo'],
     featured: true,
   },
   {
@@ -92,26 +105,4 @@ export const PROJECTS: Project[] = [
     tags: ['Next.js', 'React', 'Lab'],
     featured: false,
   },
-  {
-    slug: 'analizador-de-rutas',
-    title: 'Inspector de Arquitectura Modular',
-    category: 'experiment',
-    summary: 'Visualizador de rutas y micro-aplicaciones integradas en un solo dominio.',
-    description: 'Exploración conceptual de cómo desacoplar módulos independientes dentro de una misma instancia de Next.js sin colisión de estado.',
-    year: '2026',
-    status: 'concept',
-    tags: ['Arquitectura', 'App Router', 'Rutas'],
-    featured: true,
-  },
-  {
-    slug: 'agente-skills-hub',
-    title: 'Skills Hub & Automation System',
-    category: 'ai',
-    summary: 'Gestor y creador de skills de automatización e IA para flujos de desarrollo ágil.',
-    description: 'Espacio para diseñar, probar y descargar skills y agentes personalizados listos para Antigravity y Claude Code.',
-    year: '2026',
-    status: 'wip',
-    tags: ['AI Agents', 'Automation', 'Custom Skills'],
-    featured: true,
-  }
 ];

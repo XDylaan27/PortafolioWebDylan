@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { User } from '@supabase/supabase-js';
+import OrderPushControls from '@/components/orders/OrderPushControls';
 import {
   Bell,
   BellRing,
@@ -182,7 +183,6 @@ export default function PedidosAmigosPage() {
   const [reminderFriendId, setReminderFriendId] = useState('');
   const [reminderNote, setReminderNote] = useState('');
   const [savingReminder, setSavingReminder] = useState(false);
-  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
 
   // Lightbox para ver imágenes en grande
   const lightboxDialogRef = useRef<HTMLDialogElement | null>(null);
@@ -227,10 +227,6 @@ export default function PedidosAmigosPage() {
 
   // Escuchar sesión de Supabase
   useEffect(() => {
-    if (typeof window !== 'undefined' && 'Notification' in window) {
-      setNotificationPermission(Notification.permission);
-    }
-
     supabase.auth.getSession().then(({ data: { session } }) => {
       const currentUser = session?.user ?? null;
       setUser(currentUser);
@@ -313,78 +309,24 @@ export default function PedidosAmigosPage() {
     };
   }, [user]);
 
-  // Disparar notificación nativa vía Service Worker o Notification API
-  const triggerSystemNotification = useCallback(async (title: string, body: string, tag: string) => {
-    if (typeof window === 'undefined' || !('Notification' in window)) return;
-
-    if (Notification.permission !== 'granted') return;
-
-    try {
-      if ('serviceWorker' in navigator) {
-        const reg = await navigator.serviceWorker.ready;
-        if (reg.active) {
-          reg.active.postMessage({
-            type: 'SHOW_ORDER_REMINDER',
-            title,
-            body,
-            tag,
-            url: '/lab/pedidos-amigos',
-          });
-          return;
-        }
-      }
-      new Notification(title, {
-        body,
-        icon: '/icon.svg',
-        tag,
-      });
-    } catch {
-      // Fallback silencioso si el navegador bloquea la notificación
-    }
-  }, []);
-
-  // Monitorear recordatorios vencidos cada 15 segundos
+  // El servidor envía los avisos; esta consulta solo actualiza el estado visible.
   useEffect(() => {
-    if (!user || reminders.length === 0) return;
-
-    const checkDueReminders = async () => {
-      const now = new Date();
-      const due = reminders.filter((r) => !r.notified && new Date(r.remind_at) <= now);
-
-      if (due.length === 0) return;
-
-      for (const rem of due) {
-        const friendName = friends.find((f) => f.id === rem.friend_id)?.name;
-        const bodyText = rem.note
-          ? `${rem.note}${friendName ? ` (Con ${friendName})` : ''}`
-          : friendName
-          ? `Tenías planeado hacer un pedido con ${friendName}. ¡No olvides registrarlo!`
-          : 'Tenías programado hacer un pedido hoy. ¡Entra y regístralo!';
-
-        await triggerSystemNotification(
-          '¿Ya hiciste pedido? Regístralo',
-          bodyText,
-          `reminder-${rem.id}`
-        );
-
-        await supabase
-          .from('friend_order_reminders')
-          .update({ notified: true })
-          .eq('id', rem.id)
-          .eq('user_id', user.id);
-      }
-
-      const dueIds = new Set(due.map((d) => d.id));
-      setReminders((prev) =>
-        prev.map((r) => (dueIds.has(r.id) ? { ...r, notified: true } : r))
-      );
-      showToast('success', '🔔 Recordatorio: ¿Ya hiciste pedido? ¡Regístralo!');
+    if (!user) return;
+    let cancelled = false;
+    const refreshReminders = async () => {
+      if (document.visibilityState !== 'visible') return;
+      const { data, error } = await supabase.from('friend_order_reminders')
+        .select('*').eq('user_id', user.id).order('remind_at', { ascending: true });
+      if (!cancelled && !error && data) setReminders(data);
     };
-
-    checkDueReminders();
-    const interval = setInterval(checkDueReminders, 15000);
-    return () => clearInterval(interval);
-  }, [user, reminders, friends, triggerSystemNotification]);
+    const interval = setInterval(() => void refreshReminders(), 30000);
+    document.addEventListener('visibilitychange', refreshReminders);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', refreshReminders);
+    };
+  }, [user]);
 
   // Mapas y cálculos rápidos
   const friendsMap = useMemo(() => {
@@ -776,16 +718,6 @@ export default function PedidosAmigosPage() {
     reminderDialogRef.current?.showModal();
   };
 
-  const requestNotificationAccess = async () => {
-    if (typeof window === 'undefined' || !('Notification' in window)) {
-      showToast('error', 'Tu navegador no soporta notificaciones del sistema.');
-      return false;
-    }
-    const perm = await Notification.requestPermission();
-    setNotificationPermission(perm);
-    return perm === 'granted';
-  };
-
   const handleSaveReminder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
@@ -803,15 +735,6 @@ export default function PedidosAmigosPage() {
 
     setSavingReminder(true);
     try {
-      if (
-        typeof window !== 'undefined' &&
-        'Notification' in window &&
-        Notification.permission === 'default'
-      ) {
-        const perm = await Notification.requestPermission();
-        setNotificationPermission(perm);
-      }
-
       if (editingReminderId) {
         const { data, error } = await supabase
           .from('friend_order_reminders')
@@ -858,7 +781,7 @@ export default function PedidosAmigosPage() {
         reminderDialogRef.current?.close();
         showToast(
           'success',
-          'Recordatorio programado. Te avisaremos: "¿Ya hiciste pedido? Regístralo".'
+          'Recordatorio guardado. Activa las notificaciones en este dispositivo para recibir el aviso.'
         );
       }
     } catch (err: unknown) {
@@ -1437,28 +1360,6 @@ export default function PedidosAmigosPage() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                  {notificationPermission !== 'granted' && (
-                    <button
-                      type="button"
-                      onClick={requestNotificationAccess}
-                      className="px-3 py-2 rounded border border-amber-500/40 bg-amber-500/10 text-amber-300 text-xs font-mono cursor-pointer"
-                    >
-                      Activar permiso de notificaciones
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() =>
-                      triggerSystemNotification(
-                        '¿Ya hiciste pedido? Regístralo',
-                        'Prueba de notificación activa en tu dispositivo.',
-                        'test-reminder'
-                      )
-                    }
-                    className="px-3 py-2 rounded border border-neutral-700 hover:border-neutral-500 text-xs font-mono text-neutral-300 cursor-pointer"
-                  >
-                    Probar notificación
-                  </button>
                   <button
                     type="button"
                     onClick={openReminderModal}
@@ -1469,6 +1370,8 @@ export default function PedidosAmigosPage() {
                   </button>
                 </div>
               </div>
+
+              <OrderPushControls key={user.id} userId={user.id} />
 
               {reminders.length === 0 ? (
                 <p className="text-xs font-mono text-neutral-500 p-8 border border-dashed border-neutral-800 rounded text-center">
@@ -1492,7 +1395,7 @@ export default function PedidosAmigosPage() {
                                   : 'bg-amber-500/10 text-amber-300 border border-amber-500/30'
                               }`}
                             >
-                              {rem.notified ? 'Notificado' : 'Programado'}
+                              {rem.notified ? 'Enviado' : 'Pendiente de envío'}
                             </span>
                             <span className="text-xs font-mono text-white">
                               {new Date(rem.remind_at).toLocaleString('es-MX', {
