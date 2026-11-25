@@ -22,10 +22,17 @@ import {
 import { supabase } from '@/lib/supabase';
 import { STOKY_CATALOG, CatalogSticker } from '@/lib/stoky-catalog-data';
 
+function compareStickerCodes(left: CatalogSticker, right: CatalogSticker): number {
+  const prefix = (code: string) => code.match(/^[A-Z]+/i)?.[0].toUpperCase() || '';
+  const a = prefix(left.code), b = prefix(right.code);
+  return a.length - b.length || a.localeCompare(b, 'en') ||
+    left.code.localeCompare(right.code, 'en', { numeric: true });
+}
+
 const ITEMS_PER_PAGE = 6; // 6 stickers por "hoja"
 
 export default function StokyCatalogoPage() {
-  const [stickers, setStickers] = useState<CatalogSticker[]>(STOKY_CATALOG);
+  const [stickers, setStickers] = useState<CatalogSticker[]>(() => [...STOKY_CATALOG].sort(compareStickerCodes));
   const [isLoading, setIsLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageDirection, setPageDirection] = useState<'next' | 'prev' | null>(null);
@@ -63,7 +70,7 @@ export default function StokyCatalogoPage() {
           title: item.title || `Sticker ${item.code}`,
           previewUrl: item.preview_url
         }));
-        setStickers(mapped);
+        setStickers(mapped.sort(compareStickerCodes));
       }
     } catch (err) {
       console.warn('Fallo de conexión con Supabase:', err);
